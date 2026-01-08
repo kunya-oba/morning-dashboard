@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Sun, Cloud, CloudRain, CloudSnow, Wind, Droplets, Loader2 } from 'lucide-react'
 import axios from 'axios'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
 interface WeatherData {
   temperature: number
@@ -8,6 +9,11 @@ interface WeatherData {
   precipitation: number
   windSpeed: number
   humidity: number
+}
+
+interface HourlyTemperature {
+  time: string
+  temperature: number
 }
 
 // WMO Weather interpretation codes
@@ -34,6 +40,7 @@ const getWeatherDescription = (code: number): string => {
 
 export default function WeatherCard() {
   const [weather, setWeather] = useState<WeatherData | null>(null)
+  const [hourlyData, setHourlyData] = useState<HourlyTemperature[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -47,8 +54,9 @@ export default function WeatherCard() {
         const latitude = 35.6762
         const longitude = 139.6503
 
+        // 現在の天気と24時間の気温予報を取得
         const response = await axios.get(
-          `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,precipitation,weather_code,wind_speed_10m&timezone=Asia/Tokyo`
+          `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,precipitation,weather_code,wind_speed_10m&hourly=temperature_2m&timezone=Asia/Tokyo&forecast_days=1`
         )
 
         const current = response.data.current
@@ -59,6 +67,26 @@ export default function WeatherCard() {
           windSpeed: current.wind_speed_10m,
           humidity: current.relative_humidity_2m
         })
+
+        // 1時間ごとの気温データを整形（今日の分のみ、3時間おきに表示）
+        const hourly = response.data.hourly
+        const now = new Date()
+        const hourlyTemps: HourlyTemperature[] = []
+
+        for (let i = 0; i < hourly.time.length; i += 3) {
+          const timeStr = hourly.time[i]
+          const date = new Date(timeStr)
+
+          // 今日の日付のデータのみ
+          if (date.getDate() === now.getDate()) {
+            hourlyTemps.push({
+              time: `${date.getHours()}時`,
+              temperature: Math.round(hourly.temperature_2m[i])
+            })
+          }
+        }
+
+        setHourlyData(hourlyTemps)
       } catch (err) {
         console.error('天気情報の取得に失敗しました:', err)
         setError('天気情報を取得できませんでした')
@@ -121,6 +149,66 @@ export default function WeatherCard() {
           </div>
         </div>
       </div>
+
+      {/* 今日の気温変化グラフ */}
+      {hourlyData.length > 0 && (
+        <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">
+            今日の気温変化
+          </h3>
+          <ResponsiveContainer width="100%" height={180}>
+            <LineChart data={hourlyData} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+              <CartesianGrid
+                strokeDasharray="3 3"
+                stroke={document.documentElement.classList.contains('dark') ? '#374151' : '#e5e7eb'}
+              />
+              <XAxis
+                dataKey="time"
+                tick={{
+                  fill: document.documentElement.classList.contains('dark') ? '#9ca3af' : '#6b7280',
+                  fontSize: 12
+                }}
+                stroke={document.documentElement.classList.contains('dark') ? '#4b5563' : '#9ca3af'}
+              />
+              <YAxis
+                tick={{
+                  fill: document.documentElement.classList.contains('dark') ? '#9ca3af' : '#6b7280',
+                  fontSize: 12
+                }}
+                stroke={document.documentElement.classList.contains('dark') ? '#4b5563' : '#9ca3af'}
+                domain={['dataMin - 2', 'dataMax + 2']}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: document.documentElement.classList.contains('dark')
+                    ? 'rgba(31, 41, 55, 0.95)'
+                    : 'rgba(255, 255, 255, 0.95)',
+                  border: document.documentElement.classList.contains('dark')
+                    ? '1px solid #374151'
+                    : '1px solid #e5e7eb',
+                  borderRadius: '8px',
+                  fontSize: '14px'
+                }}
+                labelStyle={{
+                  color: document.documentElement.classList.contains('dark') ? '#e5e7eb' : '#374151',
+                  fontWeight: 'bold'
+                }}
+                itemStyle={{ color: '#f59e0b' }}
+              />
+              <Line
+                type="monotone"
+                dataKey="temperature"
+                stroke="#f59e0b"
+                strokeWidth={3}
+                dot={{ fill: '#f59e0b', r: 4 }}
+                activeDot={{ r: 6 }}
+                name="気温"
+                unit="°C"
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
 
       <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
         <div className="flex flex-col items-center">
