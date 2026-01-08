@@ -38,9 +38,36 @@ export function useBackgroundImage() {
           }
         }
 
-        // 新しい画像を取得（Unsplash Source API）
-        // ランダムシードとして日付を使用することで、同じ日は同じ画像になる
-        const imageUrl = `https://source.unsplash.com/1920x1080/?morning,sunrise,nature&sig=${today}`
+        // 新しい画像を取得
+        let imageUrl: string
+
+        // Unsplash APIキーが設定されている場合は公式APIを使用
+        const unsplashAccessKey = import.meta.env.VITE_UNSPLASH_ACCESS_KEY
+
+        if (unsplashAccessKey) {
+          // Unsplash API（高品質な朝の画像）
+          try {
+            const response = await fetch(
+              `https://api.unsplash.com/photos/random?query=morning,sunrise,nature&orientation=landscape&w=1920&h=1080`,
+              {
+                headers: {
+                  Authorization: `Client-ID ${unsplashAccessKey}`
+                }
+              }
+            )
+            const data = await response.json()
+            imageUrl = data.urls.regular
+          } catch (err) {
+            console.warn('Unsplash API失敗、Picsumにフォールバック:', err)
+            // フォールバック: Picsum Photos
+            const seed = today.replace(/-/g, '')
+            imageUrl = `https://picsum.photos/seed/${seed}/1920/1080`
+          }
+        } else {
+          // Unsplash APIキーがない場合はPicsum Photos（デフォルト）
+          const seed = today.replace(/-/g, '')
+          imageUrl = `https://picsum.photos/seed/${seed}/1920/1080`
+        }
 
         // 画像が読み込まれるまで待機
         const img = new Image()

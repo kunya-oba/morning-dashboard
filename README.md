@@ -226,6 +226,22 @@ npm run deploy
 
 ダークモードは自動的にシステム設定を検出します。UIの右上のボタンで手動切り替えも可能です。
 
+### 背景画像
+
+右上の画像アイコンをクリックすることで、背景画像のオン/オフを切り替えられます。
+
+デフォルトでは **Picsum Photos** からランダムな画像を表示します。より美しい朝の風景画像を表示したい場合は、Unsplash APIキーを設定してください：
+
+1. [Unsplash Developers](https://unsplash.com/developers) でアカウント作成
+2. アプリケーションを作成してAccess Keyを取得（無料プランで月5000リクエスト）
+3. プロジェクトルートに `.env` ファイルを作成：
+
+```bash
+VITE_UNSPLASH_ACCESS_KEY=your_access_key_here
+```
+
+4. 開発サーバーを再起動
+
 ### 地域設定
 
 天気情報の地域を変更するには、`src/components/WeatherCard.tsx` の緯度経度を変更してください：
