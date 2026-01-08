@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Sun, Moon } from 'lucide-react'
+import { Sun, Moon, Image as ImageIcon } from 'lucide-react'
 import {
   DndContext,
   closestCenter,
@@ -19,6 +19,7 @@ import NewsCard from './components/NewsCard'
 import AnniversaryCard from './components/AnniversaryCard'
 import QuoteCard from './components/QuoteCard'
 import SortableCard from './components/SortableCard'
+import { useBackgroundImage } from './hooks/useBackgroundImage'
 
 // カードのメタデータ
 interface CardMeta {
@@ -28,6 +29,14 @@ interface CardMeta {
 
 function App() {
   const [isDark, setIsDark] = useState(false)
+  const [useBackground, setUseBackground] = useState(() => {
+    // LocalStorageから背景画像の使用設定を取得
+    const saved = localStorage.getItem('useBackgroundImage')
+    return saved !== null ? JSON.parse(saved) : true // デフォルトはtrue
+  })
+
+  // 背景画像を取得
+  const { imageUrl, loading: bgLoading } = useBackgroundImage()
 
   // デフォルトのカード順序（IDのみ）
   const defaultCardOrder = ['weather', 'train', 'anniversary', 'quote', 'news']
@@ -84,6 +93,12 @@ function App() {
     document.documentElement.classList.toggle('dark')
   }
 
+  const toggleBackground = () => {
+    const newValue = !useBackground
+    setUseBackground(newValue)
+    localStorage.setItem('useBackgroundImage', JSON.stringify(newValue))
+  }
+
   // 現在の時刻から挨拶を変更
   const getGreeting = () => {
     const hour = new Date().getHours()
@@ -123,15 +138,39 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-pink-50 to-blue-50 dark:from-gray-900 dark:via-slate-800 dark:to-blue-950 transition-colors duration-500">
-      <div className="container mx-auto px-4 py-8 max-w-4xl">
+    <div
+      className="min-h-screen transition-all duration-500 relative"
+      style={{
+        background: useBackground && imageUrl
+          ? 'transparent'
+          : isDark
+            ? 'linear-gradient(to bottom right, rgb(17, 24, 39), rgb(30, 41, 59), rgb(23, 37, 84))'
+            : 'linear-gradient(to bottom right, rgb(255, 237, 213), rgb(252, 231, 243), rgb(219, 234, 254))'
+      }}
+    >
+      {/* 背景画像 */}
+      {useBackground && imageUrl && (
+        <>
+          <div
+            className="fixed inset-0 bg-cover bg-center bg-no-repeat transition-opacity duration-1000"
+            style={{
+              backgroundImage: `url(${imageUrl})`,
+              opacity: bgLoading ? 0 : 1
+            }}
+          />
+          {/* オーバーレイ（コンテンツを見やすくするため） */}
+          <div className="fixed inset-0 bg-black/30 dark:bg-black/50" />
+        </>
+      )}
+
+      <div className="container mx-auto px-4 py-8 max-w-4xl relative z-10">
         {/* ヘッダー */}
         <header className="mb-8 flex justify-between items-center">
           <div>
-            <h1 className="text-4xl md:text-5xl font-display font-bold text-gray-800 dark:text-gray-100 mb-2">
+            <h1 className="text-4xl md:text-5xl font-display font-bold text-gray-800 dark:text-gray-100 mb-2 drop-shadow-lg">
               {getGreeting()}
             </h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <p className="text-sm text-gray-500 dark:text-gray-400 drop-shadow-md">
               {new Date().toLocaleDateString('ja-JP', {
                 year: 'numeric',
                 month: 'long',
@@ -140,17 +179,33 @@ function App() {
               })}
             </p>
           </div>
-          <button
-            onClick={toggleDarkMode}
-            className="p-3 rounded-full bg-white dark:bg-gray-700 shadow-lg hover:shadow-xl transition-all hover:scale-105"
-            aria-label="ダークモード切り替え"
-          >
-            {isDark ? (
-              <Sun className="w-6 h-6 text-yellow-400" />
-            ) : (
-              <Moon className="w-6 h-6 text-gray-700" />
-            )}
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={toggleBackground}
+              className="p-3 rounded-full bg-white dark:bg-gray-700 shadow-lg hover:shadow-xl transition-all hover:scale-105"
+              aria-label="背景画像切り替え"
+              title={useBackground ? '背景画像をオフ' : '背景画像をオン'}
+            >
+              <ImageIcon
+                className={`w-6 h-6 ${
+                  useBackground
+                    ? 'text-blue-500 dark:text-blue-400'
+                    : 'text-gray-400 dark:text-gray-500'
+                }`}
+              />
+            </button>
+            <button
+              onClick={toggleDarkMode}
+              className="p-3 rounded-full bg-white dark:bg-gray-700 shadow-lg hover:shadow-xl transition-all hover:scale-105"
+              aria-label="ダークモード切り替え"
+            >
+              {isDark ? (
+                <Sun className="w-6 h-6 text-yellow-400" />
+              ) : (
+                <Moon className="w-6 h-6 text-gray-700" />
+              )}
+            </button>
+          </div>
         </header>
 
         {/* メインコンテンツ */}
