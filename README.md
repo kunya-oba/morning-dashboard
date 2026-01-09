@@ -7,16 +7,60 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-38B2AC?logo=tailwind-css&logoColor=white)
 
+## 🎯 コンセプト
+
+朝の限られた時間の中で、必要な情報を一箇所で効率よく確認できるダッシュボードアプリケーションです。複数のアプリを開く手間を省き、快適な朝のスタートをサポートします。
+
 ## ✨ 機能
 
-- ☀️ **天気情報**: Open-Meteo API を使用した東京の天気予報・気温・降水確率
-- 🚇 **都営浅草線運行情報**: 東京都交通局公式サイトから運行状況を取得・表示
+### 情報カード
+- ☀️ **天気情報**: Open-Meteo APIを使用した詳細な天気予報
+  - 現在の気温・天気状態
+  - 今日の気温変化グラフ（3時間おき）
+  - 降水量・風速・湿度の表示
+  - 10分ごとに自動更新
+
+- 🚇 **都営浅草線運行情報**: 東京都交通局公式サイトから運行状況を取得
+  - リアルタイムの運行状態
+  - 遅延・運転見合わせの通知
+  - 5分ごとに自動更新
+
 - 📰 **Google ニュース**: 主要ニュースの最新5件をRSSから取得
+  - 相対時刻表示（○分前、○時間前）
+  - ニュースソースの表示
+  - 外部リンクへのワンクリックアクセス
+  - 15分ごとに自動更新
+
 - 🎯 **今日は何の日**: Wikipedia APIから日本の記念日情報を表示
+  - 今日の記念日・歴史的出来事
+  - フォールバック用の記念日データベース内蔵
+
 - 💭 **偉人の言葉**: ZenQuotes APIから名言を取得し日本語翻訳で表示
-- 🔄 **ドラッグ&ドロップ**: カードの順序を自由に変更可能（LocalStorageに保存）
+  - 英語原文と日本語訳を同時表示
+  - リフレッシュボタンで別の名言を取得
+  - MyMemory Translation APIによる翻訳
+
+### UI/UX機能
+- 🔄 **ドラッグ&ドロップ**: カードの順序を自由に変更可能
+  - @dnd-kitによる滑らかなドラッグ操作
+  - LocalStorageで順序を永続化
+  - ホバー時にドラッグハンドルを表示
+
 - 🌙 **ダークモード対応**: システム設定を自動検出し、手動での切り替えも可能
+  - OS設定に応じた自動切り替え
+  - グラフやアイコンもダークモード対応
+  - スムーズなトランジション
+
+- 🖼️ **背景画像カスタマイズ**: 毎日変わる美しい背景画像
+  - Picsum Photosによるランダム画像（デフォルト）
+  - Unsplash API対応（オプション）
+  - 日付ベースのキャッシュ機能
+  - オン/オフ切り替え可能
+
 - 📱 **レスポンシブデザイン**: モバイルファーストで設計された美しいUI
+  - タブレット・スマートフォンに最適化
+  - 2カラムのグリッドレイアウト
+  - タッチ操作対応
 
 ## 🏗️ アーキテクチャ
 
@@ -96,12 +140,13 @@ graph TB
 ## 🛠️ 技術スタック
 
 ### フロントエンド
-- **フレームワーク**: React 19 + TypeScript
-- **ビルドツール**: Vite 7
-- **スタイリング**: Tailwind CSS v4 (PostCSS)
-- **ドラッグ&ドロップ**: @dnd-kit (core, sortable, utilities)
-- **アイコン**: Lucide React
-- **HTTP クライアント**: Axios
+- **フレームワーク**: React 19.2.3 + TypeScript 5.9.3
+- **ビルドツール**: Vite 7.3.1
+- **スタイリング**: Tailwind CSS v4.1.18 (PostCSS)
+- **ドラッグ&ドロップ**: @dnd-kit 6.3.1 (core, sortable, utilities)
+- **グラフ描画**: Recharts 3.6.0
+- **アイコン**: Lucide React 0.562.0
+- **HTTPクライアント**: Axios 1.13.2
 - **フォント**: Crimson Pro（見出し）、Noto Sans JP（本文）
 
 ### API連携
@@ -121,22 +166,30 @@ graph TB
 ```
 morning-dashboard/
 ├── src/
-│   ├── components/
-│   │   ├── WeatherCard.tsx         # 天気情報カード
-│   │   ├── TrainStatusCard.tsx     # 運行情報カード
-│   │   ├── NewsCard.tsx            # ニュースカード
-│   │   ├── AnniversaryCard.tsx     # 記念日カード
-│   │   ├── QuoteCard.tsx           # 名言カード
+│   ├── components/           # Reactコンポーネント
+│   │   ├── WeatherCard.tsx         # 天気情報カード（Rechartsグラフ統合）
+│   │   ├── TrainStatusCard.tsx     # 運行情報カード（HTMLパース）
+│   │   ├── NewsCard.tsx            # ニュースカード（RSS解析）
+│   │   ├── AnniversaryCard.tsx     # 記念日カード（Wikipedia API）
+│   │   ├── QuoteCard.tsx           # 名言カード（翻訳機能付き）
 │   │   └── SortableCard.tsx        # ドラッグ可能ラッパー
+│   ├── hooks/                # カスタムReactフック
+│   │   └── useBackgroundImage.ts   # 背景画像管理フック
 │   ├── App.tsx                     # メインアプリケーション
 │   ├── main.tsx                    # エントリーポイント
 │   └── index.css                   # グローバルスタイル
-├── index.html                      # HTML テンプレート
-├── vite.config.ts                  # Vite 設定
-├── postcss.config.js               # PostCSS 設定
-├── tsconfig.json                   # TypeScript 設定
-├── CLAUDE.md                       # プロジェクト開発ルール
-└── package.json                    # 依存関係
+├── dist/                     # ビルド出力（自動生成）
+├── index.html                # HTMLテンプレート
+├── vite.config.ts            # Vite設定（GitHub Pages対応）
+├── postcss.config.js         # PostCSS設定
+├── tsconfig.json             # TypeScript設定
+├── package.json              # 依存関係とスクリプト
+├── CLAUDE.md                 # プロジェクト開発ルール
+├── REVIEW.md                 # コードレビュー結果
+├── FEATURE_PROPOSALS.md      # 機能追加提案
+├── CONTRIBUTING.md           # 開発ガイドライン
+├── API.md                    # API仕様書
+└── CHANGELOG.md              # 変更履歴
 ```
 
 ## 🚀 セットアップ
@@ -265,12 +318,47 @@ const longitude = 139.6503; // 東京の経度
 
 ## 📝 今後の拡張アイデア
 
-- [ ] カード表示/非表示の切り替え機能
-- [ ] 朝の習慣チェックリスト
-- [ ] 服装提案機能（気温連動）
-- [ ] Google Calendar連携
-- [ ] 通勤時刻逆算機能
-- [ ] 背景画像カスタマイズ（Unsplash API）
+詳細は [FEATURE_PROPOSALS.md](./FEATURE_PROPOSALS.md) を参照してください。
+
+### 優先度: 高
+- [ ] TODOリスト / タスク管理カード
+- [ ] 時計・タイマーカード（ポモドーロタイマー）
+- [ ] モーニングルーティーンチェックリスト
+
+### 優先度: 中
+- [ ] 複数路線の運行情報対応
+- [ ] 天気アラート・通知機能
+- [ ] 位置情報のカスタマイズ
+- [ ] ニュースのカテゴリフィルター
+
+### 優先度: 低
+- [ ] カレンダー・スケジュール統合（Google Calendar）
+- [ ] 通勤経路・交通情報（Google Maps API）
+- [ ] 為替・株価情報カード
+- [ ] PWA対応（オフライン機能）
+
+## 🐛 既知の問題と改善点
+
+詳細は [REVIEW.md](./REVIEW.md) を参照してください。
+
+### 重要度: 高
+- 環境変数の適切な管理（Unsplash APIキー）
+- ダークモード切り替え時のグラフ色更新
+- API応答の型定義不足
+
+### 重要度: 中
+- console.logの残存（本番環境での除去）
+- エラー境界（Error Boundary）の実装
+- 非同期処理のクリーンアップ改善
+
+## 📚 ドキュメント
+
+- [CLAUDE.md](./CLAUDE.md) - プロジェクト開発ルール
+- [REVIEW.md](./REVIEW.md) - コードレビュー結果
+- [FEATURE_PROPOSALS.md](./FEATURE_PROPOSALS.md) - 機能追加提案
+- [CONTRIBUTING.md](./CONTRIBUTING.md) - 開発ガイドライン
+- [API.md](./API.md) - API仕様書
+- [CHANGELOG.md](./CHANGELOG.md) - 変更履歴
 
 ## 📄 ライセンス
 
