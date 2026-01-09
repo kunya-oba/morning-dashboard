@@ -23,6 +23,7 @@ import TodoCard from './components/TodoCard'
 import LocationSettingsCard from './components/LocationSettingsCard'
 import ClockTimerCard from './components/ClockTimerCard'
 import RoutineCard from './components/RoutineCard'
+import PokemonCard from './components/PokemonCard'
 import SortableCard from './components/SortableCard'
 import { useBackgroundImage } from './hooks/useBackgroundImage'
 import { useLocation } from './hooks/useLocation'
@@ -59,7 +60,7 @@ function App() {
   } = useLocation()
 
   // デフォルトのカード順序（IDのみ）
-  const defaultCardOrder = ['weather', 'clock', 'routine', 'train', 'todo', 'location', 'anniversary', 'quote', 'news']
+  const defaultCardOrder = ['weather', 'clock', 'routine', 'pokemon', 'train', 'todo', 'location', 'anniversary', 'quote', 'news']
 
   // カードの順序を管理
   const [cardOrder, setCardOrder] = useState<string[]>(() => {
@@ -117,6 +118,8 @@ function App() {
         return <ClockTimerCard />
       case 'routine':
         return <RoutineCard />
+      case 'pokemon':
+        return <PokemonCard />
       case 'train':
         return <TrainStatusCard />
       case 'todo':
