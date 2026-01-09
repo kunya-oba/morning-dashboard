@@ -4,7 +4,22 @@ import axios from 'axios'
 import { logger } from '../utils/logger'
 import { INTERVALS } from '../constants/intervals'
 import { formatRelativeTime } from '../utils/dateFormatter'
-import { NewsItem, NewsCategory, NEWS_SOURCES, CATEGORY_LABELS, CATEGORY_ICONS } from '../types/news'
+import { NewsItem, NewsCategory, NEWS_SOURCES, CATEGORY_LABELS, CATEGORY_ICONS, CATEGORY_KEYWORDS } from '../types/news'
+
+// ニュースのカテゴリを自動判定する関数
+const detectCategory = (title: string, description: string): NewsCategory[] => {
+  const text = `${title} ${description}`.toLowerCase()
+  const categories: NewsCategory[] = ['all'] // 常に'all'を含む
+
+  // 各カテゴリのキーワードをチェック
+  for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+    if (keywords.some(keyword => text.includes(keyword.toLowerCase()))) {
+      categories.push(category as NewsCategory)
+    }
+  }
+
+  return categories
+}
 
 export default function NewsCard() {
   const [news, setNews] = useState<NewsItem[]>([])
@@ -38,63 +53,76 @@ export default function NewsCard() {
         setLoading(true)
         setError(null)
 
-        // 選択されたカテゴリのRSSフィードを取得
-        const sourcesToFetch = selectedCategories.includes('all')
-          ? [NEWS_SOURCES[0]] // 総合のみ
-          : NEWS_SOURCES.filter(source =>
-              source.category && selectedCategories.includes(source.category)
-            )
+        logger.log('選択されたカテゴリ:', selectedCategories)
 
+        // Google News RSSを1回だけ取得
+        const source = NEWS_SOURCES[0] // 総合ニュースのみ取得
         const allNews: NewsItem[] = []
 
-        // 複数のRSSフィードを並列で取得
-        const fetchPromises = sourcesToFetch.map(async (source) => {
-          const proxies = [
-            `https://api.allorigins.win/get?url=${encodeURIComponent(source.rssUrl)}`,
-            `https://corsproxy.io/?${encodeURIComponent(source.rssUrl)}`
-          ]
+        const proxies = [
+          `https://api.allorigins.win/get?url=${encodeURIComponent(source.rssUrl)}`,
+          `https://corsproxy.io/?${encodeURIComponent(source.rssUrl)}`
+        ]
 
-          for (const proxyUrl of proxies) {
-            try {
-              logger.log(`${source.name}を取得中...`)
-              const response = await axios.get(proxyUrl, { timeout: 10000 })
+        let fetchSuccess = false
+        for (const proxyUrl of proxies) {
+          try {
+            logger.log(`ニュースを取得中... (プロキシ: ${proxyUrl.split('?')[0]})`)
+            const response = await axios.get(proxyUrl, { timeout: 10000 })
 
-              // AllOrigins の場合、contentsプロパティを確認
-              const xmlText = response.data.contents || response.data
+            // AllOrigins の場合、contentsプロパティを確認
+            const xmlText = response.data.contents || response.data
 
-              // XMLをパース
-              const parser = new DOMParser()
-              const xmlDoc = parser.parseFromString(xmlText, 'text/xml')
-              const items = xmlDoc.querySelectorAll('item')
+            // XMLをパース
+            const parser = new DOMParser()
+            const xmlDoc = parser.parseFromString(xmlText, 'text/xml')
 
-              items.forEach((item) => {
-                const title = item.querySelector('title')?.textContent || ''
-                const link = item.querySelector('link')?.textContent || ''
-                const pubDate = item.querySelector('pubDate')?.textContent || ''
-                const description = item.querySelector('description')?.textContent || ''
-
-                if (title && link) {
-                  allNews.push({
-                    title: title.trim(),
-                    link: link.trim(),
-                    pubDate: pubDate.trim(),
-                    source: source.name,
-                    category: source.category,
-                    description: description.trim(),
-                    isFavorite: favorites.includes(link)
-                  })
-                }
-              })
-
-              break // 成功したらループを抜ける
-            } catch (err) {
-              logger.error(`${source.name}の取得に失敗:`, err)
-              continue // 次のプロキシを試す
+            // パースエラーをチェック
+            const parserError = xmlDoc.querySelector('parsererror')
+            if (parserError) {
+              logger.error('XMLパースエラー:', parserError.textContent)
+              continue
             }
-          }
-        })
 
-        await Promise.all(fetchPromises)
+            const items = xmlDoc.querySelectorAll('item')
+            logger.log(`${items.length}件の記事を取得`)
+
+            items.forEach((item) => {
+              const title = item.querySelector('title')?.textContent || ''
+              const link = item.querySelector('link')?.textContent || ''
+              const pubDate = item.querySelector('pubDate')?.textContent || ''
+              const description = item.querySelector('description')?.textContent || ''
+
+              if (title && link) {
+                // カテゴリを自動判定
+                const categories = detectCategory(title, description)
+
+                allNews.push({
+                  title: title.trim(),
+                  link: link.trim(),
+                  pubDate: pubDate.trim(),
+                  source: source.name,
+                  categories: categories,
+                  description: description.trim(),
+                  isFavorite: favorites.includes(link)
+                })
+              }
+            })
+
+            logger.log(`${items.length}件の記事を処理完了`)
+            fetchSuccess = true
+            break // 成功したらループを抜ける
+          } catch (err) {
+            logger.error('ニュースの取得に失敗:', err)
+            continue // 次のプロキシを試す
+          }
+        }
+
+        if (!fetchSuccess) {
+          throw new Error('すべてのプロキシで取得に失敗しました')
+        }
+
+        logger.log('取得した記事総数:', allNews.length)
 
         // 日付順にソート（新しい順）
         allNews.sort((a, b) => {
@@ -108,6 +136,7 @@ export default function NewsCard() {
           index === self.findIndex((t) => t.title === item.title)
         )
 
+        logger.log('重複削除後の記事数:', uniqueNews.length)
         setNews(uniqueNews)
       } catch (err) {
         logger.error('ニュースの取得に失敗しました:', err)
@@ -120,7 +149,7 @@ export default function NewsCard() {
     fetchNews()
     const interval = setInterval(fetchNews, INTERVALS.NEWS_UPDATE)
     return () => clearInterval(interval)
-  }, [selectedCategories, favorites])
+  }, [favorites])
 
   const toggleCategory = (category: NewsCategory) => {
     if (category === 'all') {
@@ -153,8 +182,15 @@ export default function NewsCard() {
     })
   }
 
-  // キーワードでフィルタリング
+  // カテゴリとキーワードでフィルタリング
   const filteredNews = news.filter(item => {
+    // カテゴリフィルター
+    const categoryMatch = selectedCategories.includes('all') ||
+      item.categories.some(cat => selectedCategories.includes(cat))
+
+    if (!categoryMatch) return false
+
+    // キーワードフィルター
     if (!searchKeyword) return true
     const keyword = searchKeyword.toLowerCase()
     return item.title.toLowerCase().includes(keyword) ||
@@ -290,17 +326,17 @@ export default function NewsCard() {
                     </h3>
                     <ExternalLink className="w-4 h-4 text-gray-400 dark:text-gray-500 group-hover:text-purple-500 dark:group-hover:text-purple-400 flex-shrink-0 transition-colors" />
                   </div>
-                  <div className="flex items-center gap-3 mt-2">
+                  <div className="flex items-center gap-3 mt-2 flex-wrap">
                     {item.source && (
                       <span className="text-xs text-gray-500 dark:text-gray-400 truncate">
                         {item.source}
                       </span>
                     )}
-                    {item.category && item.category !== 'all' && (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
-                        {CATEGORY_ICONS[item.category]} {CATEGORY_LABELS[item.category]}
+                    {item.categories.filter(cat => cat !== 'all').slice(0, 2).map((category) => (
+                      <span key={category} className="text-xs px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
+                        {CATEGORY_ICONS[category]} {CATEGORY_LABELS[category]}
                       </span>
-                    )}
+                    ))}
                     <span className="text-xs text-gray-400 dark:text-gray-500">
                       {formatRelativeTime(item.pubDate)}
                     </span>
