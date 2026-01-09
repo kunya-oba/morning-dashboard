@@ -19,6 +19,7 @@ import TrainStatusCard from './components/TrainStatusCard'
 import NewsCard from './components/NewsCard'
 import AnniversaryCard from './components/AnniversaryCard'
 import QuoteCard from './components/QuoteCard'
+import TodoCard from './components/TodoCard'
 import SortableCard from './components/SortableCard'
 import { useBackgroundImage } from './hooks/useBackgroundImage'
 
@@ -43,7 +44,7 @@ function App() {
   const { imageUrl, loading: bgLoading } = useBackgroundImage()
 
   // デフォルトのカード順序（IDのみ）
-  const defaultCardOrder = ['weather', 'train', 'anniversary', 'quote', 'news']
+  const defaultCardOrder = ['weather', 'train', 'todo', 'anniversary', 'quote', 'news']
 
   // カードの順序を管理
   const [cardOrder, setCardOrder] = useState<string[]>(() => {
@@ -67,6 +68,8 @@ function App() {
         return <WeatherCard />
       case 'train':
         return <TrainStatusCard />
+      case 'todo':
+        return <TodoCard />
       case 'anniversary':
         return <AnniversaryCard />
       case 'quote':
