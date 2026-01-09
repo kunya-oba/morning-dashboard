@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Sun, Moon, Image as ImageIcon } from 'lucide-react'
+import { logger } from './utils/logger'
 import {
   DndContext,
   closestCenter,
@@ -22,7 +23,16 @@ import SortableCard from './components/SortableCard'
 import { useBackgroundImage } from './hooks/useBackgroundImage'
 
 function App() {
-  const [isDark, setIsDark] = useState(false)
+  // ダークモードの状態をLocalStorageから復元
+  const [isDark, setIsDark] = useState(() => {
+    const saved = localStorage.getItem('darkMode')
+    if (saved !== null) {
+      return JSON.parse(saved)
+    }
+    // 保存がない場合はシステム設定を使用
+    return window.matchMedia('(prefers-color-scheme: dark)').matches
+  })
+
   const [useBackground, setUseBackground] = useState(() => {
     // LocalStorageから背景画像の使用設定を取得
     const saved = localStorage.getItem('useBackgroundImage')
@@ -43,7 +53,7 @@ function App() {
       try {
         return JSON.parse(savedOrder) as string[]
       } catch (e) {
-        console.error('カード順序の復元に失敗:', e)
+        logger.error('カード順序の復元に失敗:', e)
         return defaultCardOrder
       }
     }
@@ -74,17 +84,27 @@ function App() {
   }
 
   useEffect(() => {
-    // ダークモードの初期設定
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-    setIsDark(prefersDark)
-    if (prefersDark) {
+    // ダークモードの初期設定: LocalStorageの値に基づいてクラスを設定
+    if (isDark) {
       document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
     }
   }, [])
 
   const toggleDarkMode = () => {
-    setIsDark(!isDark)
-    document.documentElement.classList.toggle('dark')
+    const newValue = !isDark
+    setIsDark(newValue)
+
+    // DOMクラスを更新
+    if (newValue) {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+    }
+
+    // LocalStorageに保存
+    localStorage.setItem('darkMode', JSON.stringify(newValue))
   }
 
   const toggleBackground = () => {
@@ -124,7 +144,7 @@ function App() {
 
         // LocalStorageに保存
         localStorage.setItem('cardOrder', JSON.stringify(newOrder))
-        console.log('カード順序を保存:', newOrder)
+        logger.log('カード順序を保存:', newOrder)
 
         return newOrder
       })
