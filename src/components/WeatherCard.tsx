@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Sun, Cloud, CloudRain, CloudSnow, Wind, Droplets, Loader2 } from 'lucide-react'
+import { Sun, Cloud, CloudRain, CloudSnow, Wind, Droplets, Loader2, MapPin, ChevronDown } from 'lucide-react'
 import axios from 'axios'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { useDarkMode } from '../hooks/useDarkMode'
 import { OpenMeteoResponse } from '../types/api'
 import { logger } from '../utils/logger'
 import { INTERVALS } from '../constants/intervals'
+import { Location } from '../types/location'
 
 interface WeatherData {
   temperature: number
@@ -46,14 +47,36 @@ interface WeatherCardProps {
   latitude?: number
   longitude?: number
   locationName?: string
+  locations?: Location[]
+  onSetCurrentLocation?: (location: Location) => void
 }
 
-export default function WeatherCard({ latitude = 35.6762, longitude = 139.6503, locationName }: WeatherCardProps) {
+export default function WeatherCard({
+  latitude = 35.6762,
+  longitude = 139.6503,
+  locationName,
+  locations = [],
+  onSetCurrentLocation
+}: WeatherCardProps) {
   const [weather, setWeather] = useState<WeatherData | null>(null)
   const [hourlyData, setHourlyData] = useState<HourlyTemperature[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [showLocationMenu, setShowLocationMenu] = useState(false)
   const isDark = useDarkMode()
+
+  // 外側クリックでメニューを閉じる
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement
+      if (showLocationMenu && !target.closest('.location-menu-container')) {
+        setShowLocationMenu(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showLocationMenu])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -149,13 +172,57 @@ export default function WeatherCard({ latitude = 35.6762, longitude = 139.6503, 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 hover:shadow-xl transition-all">
       <div className="mb-6">
-        <h2 className="text-2xl font-display font-semibold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-          <Sun className="w-7 h-7 text-yellow-500" />
-          今日の天気
-        </h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl font-display font-semibold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+            <Sun className="w-7 h-7 text-yellow-500" />
+            今日の天気
+          </h2>
+
+          {/* 都市選択ボタン */}
+          {locations.length > 0 && onSetCurrentLocation && (
+            <div className="relative location-menu-container">
+              <button
+                onClick={() => setShowLocationMenu(!showLocationMenu)}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                aria-label="都市を変更"
+              >
+                <MapPin className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {locationName || '東京'}
+                </span>
+                <ChevronDown className={`w-4 h-4 text-gray-600 dark:text-gray-400 transition-transform ${showLocationMenu ? 'rotate-180' : ''}`} />
+              </button>
+
+              {/* ドロップダウンメニュー */}
+              {showLocationMenu && (
+                <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-700 rounded-lg shadow-xl border border-gray-200 dark:border-gray-600 z-10 max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent">
+                  {locations.map((location) => (
+                    <button
+                      key={location.id}
+                      onClick={() => {
+                        onSetCurrentLocation(location)
+                        setShowLocationMenu(false)
+                      }}
+                      className={`w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors first:rounded-t-lg last:rounded-b-lg ${
+                        locationName === location.name
+                          ? 'bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300'
+                          : 'text-gray-700 dark:text-gray-300'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <MapPin className="w-3 h-3" />
+                        <span className="text-sm">{location.name}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
         {locationName && (
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 ml-9">
-            {locationName}
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+            緯度: {latitude.toFixed(4)}, 経度: {longitude.toFixed(4)}
           </p>
         )}
       </div>
@@ -261,7 +328,7 @@ export default function WeatherCard({ latitude = 35.6762, longitude = 139.6503, 
       </div>
 
       <div className="mt-4 text-xs text-gray-400 dark:text-gray-500 text-center">
-        東京（10分ごとに更新）
+        {locationName || '東京'}（10分ごとに更新）
       </div>
     </div>
   )

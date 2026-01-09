@@ -83,6 +83,8 @@ function App() {
             latitude={currentLocation?.latitude}
             longitude={currentLocation?.longitude}
             locationName={currentLocation?.name}
+            locations={locations}
+            onSetCurrentLocation={setCurrentLocation}
           />
         )
       case 'train':
