@@ -2,6 +2,10 @@ import { useEffect, useState } from 'react'
 import { Sun, Cloud, CloudRain, CloudSnow, Wind, Droplets, Loader2 } from 'lucide-react'
 import axios from 'axios'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { useDarkMode } from '../hooks/useDarkMode'
+import { OpenMeteoResponse } from '../types/api'
+import { logger } from '../utils/logger'
+import { INTERVALS } from '../constants/intervals'
 
 interface WeatherData {
   temperature: number
@@ -43,8 +47,11 @@ export default function WeatherCard() {
   const [hourlyData, setHourlyData] = useState<HourlyTemperature[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const isDark = useDarkMode()
 
   useEffect(() => {
+    const controller = new AbortController()
+
     const fetchWeather = async () => {
       try {
         setLoading(true)
@@ -55,8 +62,9 @@ export default function WeatherCard() {
         const longitude = 139.6503
 
         // 現在の天気と24時間の気温予報を取得
-        const response = await axios.get(
-          `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,precipitation,weather_code,wind_speed_10m&hourly=temperature_2m&timezone=Asia/Tokyo&forecast_days=1`
+        const response = await axios.get<OpenMeteoResponse>(
+          `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,precipitation,weather_code,wind_speed_10m&hourly=temperature_2m&timezone=Asia/Tokyo&forecast_days=1`,
+          { signal: controller.signal }
         )
 
         const current = response.data.current
@@ -88,7 +96,10 @@ export default function WeatherCard() {
 
         setHourlyData(hourlyTemps)
       } catch (err) {
-        console.error('天気情報の取得に失敗しました:', err)
+        if (axios.isCancel(err)) {
+          return
+        }
+        logger.error('天気情報の取得に失敗しました:', err)
         setError('天気情報を取得できませんでした')
       } finally {
         setLoading(false)
@@ -97,8 +108,12 @@ export default function WeatherCard() {
 
     fetchWeather()
     // 10分ごとに更新
-    const interval = setInterval(fetchWeather, 600000)
-    return () => clearInterval(interval)
+    const interval = setInterval(fetchWeather, INTERVALS.WEATHER_UPDATE)
+
+    return () => {
+      controller.abort()
+      clearInterval(interval)
+    }
   }, [])
 
   if (loading) {
@@ -160,37 +175,37 @@ export default function WeatherCard() {
             <LineChart data={hourlyData} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
               <CartesianGrid
                 strokeDasharray="3 3"
-                stroke={document.documentElement.classList.contains('dark') ? '#374151' : '#e5e7eb'}
+                stroke={isDark ? '#374151' : '#e5e7eb'}
               />
               <XAxis
                 dataKey="time"
                 tick={{
-                  fill: document.documentElement.classList.contains('dark') ? '#9ca3af' : '#6b7280',
+                  fill: isDark ? '#9ca3af' : '#6b7280',
                   fontSize: 12
                 }}
-                stroke={document.documentElement.classList.contains('dark') ? '#4b5563' : '#9ca3af'}
+                stroke={isDark ? '#4b5563' : '#9ca3af'}
               />
               <YAxis
                 tick={{
-                  fill: document.documentElement.classList.contains('dark') ? '#9ca3af' : '#6b7280',
+                  fill: isDark ? '#9ca3af' : '#6b7280',
                   fontSize: 12
                 }}
-                stroke={document.documentElement.classList.contains('dark') ? '#4b5563' : '#9ca3af'}
+                stroke={isDark ? '#4b5563' : '#9ca3af'}
                 domain={['dataMin - 2', 'dataMax + 2']}
               />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: document.documentElement.classList.contains('dark')
+                  backgroundColor: isDark
                     ? 'rgba(31, 41, 55, 0.95)'
                     : 'rgba(255, 255, 255, 0.95)',
-                  border: document.documentElement.classList.contains('dark')
+                  border: isDark
                     ? '1px solid #374151'
                     : '1px solid #e5e7eb',
                   borderRadius: '8px',
                   fontSize: '14px'
                 }}
                 labelStyle={{
-                  color: document.documentElement.classList.contains('dark') ? '#e5e7eb' : '#374151',
+                  color: isDark ? '#e5e7eb' : '#374151',
                   fontWeight: 'bold'
                 }}
                 itemStyle={{ color: '#f59e0b' }}

@@ -191,7 +191,9 @@ function App() {
             <button
               onClick={toggleDarkMode}
               className="p-3 rounded-full bg-white dark:bg-gray-700 shadow-lg hover:shadow-xl transition-all hover:scale-105"
-              aria-label="ダークモード切り替え"
+              aria-label={isDark ? 'ライトモードに切り替え' : 'ダークモードに切り替え'}
+              aria-pressed={isDark}
+              title={isDark ? 'ライトモードに切り替え' : 'ダークモードに切り替え'}
             >
               {isDark ? (
                 <Sun className="w-6 h-6 text-yellow-400" />

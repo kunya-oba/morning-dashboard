@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Calendar, Sparkles, Loader2 } from 'lucide-react'
 import axios from 'axios'
+import { logger } from '../utils/logger'
+import { formatJapaneseDate } from '../utils/dateFormatter'
 
 interface Anniversary {
   title: string
@@ -58,7 +60,7 @@ export default function AnniversaryCard() {
 
         setAnniversary(selectedAnniversary)
       } catch (err) {
-        console.error('記念日情報の取得に失敗しました:', err)
+        logger.error('記念日情報の取得に失敗しました:', err)
 
         // フォールバック: 日本の主要な記念日データ
         const fallbackAnniversaries = getFallbackAnniversaries()
@@ -164,12 +166,7 @@ export default function AnniversaryCard() {
 
         <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
           <p className="text-xs text-gray-400 dark:text-gray-500 text-center">
-            {new Date().toLocaleDateString('ja-JP', {
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric',
-              weekday: 'long'
-            })}
+            {formatJapaneseDate()}
           </p>
         </div>
       </div>

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Train, AlertCircle, CheckCircle, Loader2 } from 'lucide-react'
 import axios from 'axios'
+import { logger } from '../utils/logger'
+import { INTERVALS } from '../constants/intervals'
 
 interface TrainStatus {
   operator: string
@@ -20,7 +22,7 @@ export default function TrainStatusCard() {
         setLoading(true)
         setError(null)
 
-        console.log('運行情報取得開始...')
+        logger.log('運行情報取得開始...')
 
         // 都営浅草線の公式ページから運行情報を取得
         const targetUrl = 'https://www.kotsu.metro.tokyo.jp/subway/schedule/asakusa.html'
@@ -36,7 +38,7 @@ export default function TrainStatusCard() {
 
         for (const proxyUrl of proxies) {
           try {
-            console.log('プロキシを試行中:', proxyUrl)
+            logger.log('プロキシを試行中:', proxyUrl)
             const response = await axios.get(proxyUrl, {
               timeout: 15000
             })
@@ -48,7 +50,7 @@ export default function TrainStatusCard() {
               htmlContent = response.data
             }
 
-            console.log('HTML取得成功')
+            logger.log('HTML取得成功')
             break
           } catch (err) {
             console.warn('プロキシ失敗:', proxyUrl, err)
@@ -72,7 +74,7 @@ export default function TrainStatusCard() {
         // InformationUnkou クラスから情報を取得
         const infoUnkouElements = doc.querySelectorAll('.InformationUnkou, #InformationUnkou, [class*="InformationUnkou"]')
 
-        console.log('InformationUnkou要素数:', infoUnkouElements.length)
+        logger.log('InformationUnkou要素数:', infoUnkouElements.length)
 
         let foundInfo = false
 
@@ -83,7 +85,7 @@ export default function TrainStatusCard() {
             .filter(text => text && text.length > 0)
             .join(' ')
 
-          console.log('取得したテキスト:', textContent)
+          logger.log('取得したテキスト:', textContent)
 
           if (textContent && textContent.length > 0) {
             // まずネガティブな表現（遅延がない）をチェック
@@ -136,7 +138,7 @@ export default function TrainStatusCard() {
 
         // 他のセレクタも試す（フォールバック）
         if (!foundInfo) {
-          console.log('InformationUnkouで情報が見つからないため、他のセレクタを試行...')
+          logger.log('InformationUnkouで情報が見つからないため、他のセレクタを試行...')
 
           const fallbackSelectors = [
             '.unko-info',
@@ -157,7 +159,7 @@ export default function TrainStatusCard() {
                 .join(' ')
 
               if (textContent && textContent.length > 10) {
-                console.log(`${selector} で情報発見:`, textContent.substring(0, 50))
+                logger.log(`${selector} で情報発見:`, textContent.substring(0, 50))
 
                 // ネガティブな表現をチェック
                 const hasNoDelay =
@@ -190,12 +192,12 @@ export default function TrainStatusCard() {
 
         // それでも見つからない場合は、平常運転と判断
         if (!foundInfo) {
-          console.log('運行情報が見つかりませんでした。平常運転と判断します。')
+          logger.log('運行情報が見つかりませんでした。平常運転と判断します。')
           statusText = '平常運転'
           detailText = '現在、運行に関する情報はありません'
         }
 
-        console.log('運行情報解析完了:', { statusText, detailText })
+        logger.log('運行情報解析完了:', { statusText, detailText })
 
         setStatus({
           operator: '都営地下鉄',
@@ -204,10 +206,10 @@ export default function TrainStatusCard() {
           detail: detailText
         })
       } catch (err) {
-        console.error('運行情報の取得に失敗しました:', err)
+        logger.error('運行情報の取得に失敗しました:', err)
 
         if (axios.isAxiosError(err)) {
-          console.error('Axiosエラー詳細:', {
+          logger.error('Axiosエラー詳細:', {
             message: err.message,
             response: err.response?.data,
             status: err.response?.status
@@ -230,7 +232,7 @@ export default function TrainStatusCard() {
 
     fetchTrainStatus()
     // 5分ごとに更新
-    const interval = setInterval(fetchTrainStatus, 300000)
+    const interval = setInterval(fetchTrainStatus, INTERVALS.TRAIN_STATUS_UPDATE)
     return () => clearInterval(interval)
   }, [])
 

@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Newspaper, ExternalLink, Loader2, AlertCircle } from 'lucide-react'
 import axios from 'axios'
+import { logger } from '../utils/logger'
+import { INTERVALS } from '../constants/intervals'
+import { formatRelativeTime } from '../utils/dateFormatter'
 
 interface NewsItem {
   title: string
@@ -36,7 +39,7 @@ export default function NewsCard() {
         // プロキシを順番に試す
         for (const proxyUrl of proxies) {
           try {
-            console.log('プロキシを試行中:', proxyUrl)
+            logger.log('プロキシを試行中:', proxyUrl)
             response = await axios.get(proxyUrl, {
               timeout: 10000
             })
@@ -100,9 +103,9 @@ export default function NewsCard() {
         }
 
         setNews(newsItems)
-        console.log('ニュース取得成功:', newsItems.length, '件')
+        logger.log('ニュース取得成功:', newsItems.length, '件')
       } catch (err) {
-        console.error('ニュースの取得に失敗しました:', err)
+        logger.error('ニュースの取得に失敗しました:', err)
         setError('ニュースを取得できませんでした。しばらくしてから再度お試しください。')
       } finally {
         setLoading(false)
@@ -111,34 +114,10 @@ export default function NewsCard() {
 
     fetchNews()
     // 15分ごとに更新
-    const interval = setInterval(fetchNews, 900000)
+    const interval = setInterval(fetchNews, INTERVALS.NEWS_UPDATE)
     return () => clearInterval(interval)
   }, [])
 
-  // 日付をフォーマット
-  const formatDate = (dateString: string): string => {
-    try {
-      const date = new Date(dateString)
-      const now = new Date()
-      const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60))
-
-      if (diffInHours < 1) {
-        const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60))
-        return `${diffInMinutes}分前`
-      } else if (diffInHours < 24) {
-        return `${diffInHours}時間前`
-      } else {
-        return date.toLocaleDateString('ja-JP', {
-          month: 'short',
-          day: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit'
-        })
-      }
-    } catch {
-      return ''
-    }
-  }
 
   if (loading) {
     return (
@@ -183,6 +162,7 @@ export default function NewsCard() {
             href={item.link}
             target="_blank"
             rel="noopener noreferrer"
+            aria-label={`ニュース記事: ${item.title}`}
             className="block p-4 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-all group"
           >
             <div className="flex items-start justify-between gap-3">
@@ -197,7 +177,7 @@ export default function NewsCard() {
                     </span>
                   )}
                   <span className="text-xs text-gray-400 dark:text-gray-500">
-                    {formatDate(item.pubDate)}
+                    {formatRelativeTime(item.pubDate)}
                   </span>
                 </div>
               </div>

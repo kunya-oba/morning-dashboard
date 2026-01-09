@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { logger } from '../utils/logger'
 
 interface BackgroundImageState {
   imageUrl: string | null
@@ -42,7 +43,7 @@ export function useBackgroundImage() {
         let imageUrl: string
 
         // Unsplash APIキーが設定されている場合は公式APIを使用
-        const unsplashAccessKey = ""
+        const unsplashAccessKey = import.meta.env.VITE_UNSPLASH_ACCESS_KEY || ""
 
         if (unsplashAccessKey) {
           // Unsplash API（高品質な朝の画像）
@@ -58,7 +59,7 @@ export function useBackgroundImage() {
             const data = await response.json()
             imageUrl = data.urls.regular
           } catch (err) {
-            console.warn('Unsplash API失敗、Picsumにフォールバック:', err)
+            logger.warn('Unsplash API失敗、Picsumにフォールバック:', err)
             // フォールバック: Picsum Photos
             const seed = today.replace(/-/g, '')
             imageUrl = `https://picsum.photos/seed/${seed}/1920/1080`
@@ -86,7 +87,7 @@ export function useBackgroundImage() {
         }
 
         img.onerror = () => {
-          console.error('背景画像の読み込みに失敗しました')
+          logger.error('背景画像の読み込みに失敗しました')
           setState({
             imageUrl: null,
             loading: false,
@@ -96,7 +97,7 @@ export function useBackgroundImage() {
 
         img.src = imageUrl
       } catch (err) {
-        console.error('背景画像の取得に失敗しました:', err)
+        logger.error('背景画像の取得に失敗しました:', err)
         setState({
           imageUrl: null,
           loading: false,

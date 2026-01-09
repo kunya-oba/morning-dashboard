@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Quote, RefreshCw, Loader2 } from 'lucide-react'
 import axios from 'axios'
+import { logger } from '../utils/logger'
 
 interface QuoteData {
   text: string
@@ -18,7 +19,7 @@ export default function QuoteCard() {
       setLoading(true)
       setError(null)
 
-      console.log('名言取得開始...')
+      logger.log('名言取得開始...')
 
       // ZenQuotes APIからランダムな名言を取得（CORS回避のためプロキシを使用）
       const zenQuotesUrl = 'https://zenquotes.io/api/random'
@@ -34,7 +35,7 @@ export default function QuoteCard() {
 
       for (const proxyUrl of proxies) {
         try {
-          console.log('プロキシを試行中:', proxyUrl)
+          logger.log('プロキシを試行中:', proxyUrl)
           const response = await axios.get(proxyUrl, {
             timeout: 10000
           })
@@ -48,7 +49,7 @@ export default function QuoteCard() {
             quoteResponse = Array.isArray(response.data) ? response.data[0] : response.data
           }
 
-          console.log('ZenQuotes API成功 (プロキシ経由):', quoteResponse)
+          logger.log('ZenQuotes API成功 (プロキシ経由):', quoteResponse)
           break
         } catch (err) {
           console.warn('プロキシ失敗:', proxyUrl, err)
@@ -65,21 +66,21 @@ export default function QuoteCard() {
       const content = quoteResponse.q || quoteResponse.quote || ''
       const author = quoteResponse.a || quoteResponse.author || 'Unknown'
 
-      console.log('名言データ:', { content, author })
+      logger.log('名言データ:', { content, author })
 
       let translatedText = content // デフォルト: 英語のまま
 
       // 複数の翻訳APIを試す
       try {
         // 方法1: MyMemory Translation API（無料、APIキー不要）
-        console.log('MyMemory翻訳を試行...')
+        logger.log('MyMemory翻訳を試行...')
         const myMemoryUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(content)}&langpair=en|ja`
 
         const myMemoryResponse = await axios.get(myMemoryUrl, {
           timeout: 10000
         })
 
-        console.log('MyMemory応答:', myMemoryResponse.data)
+        logger.log('MyMemory応答:', myMemoryResponse.data)
 
         if (myMemoryResponse.data?.responseData?.translatedText) {
           const translated = myMemoryResponse.data.responseData.translatedText
@@ -87,9 +88,9 @@ export default function QuoteCard() {
           // 翻訳が成功したか確認（元のテキストと異なる場合）
           if (translated !== content && translated.length > 0) {
             translatedText = translated
-            console.log('MyMemory翻訳成功:', translatedText)
+            logger.log('MyMemory翻訳成功:', translatedText)
           } else {
-            console.log('MyMemory翻訳が不十分、次の方法を試行...')
+            logger.log('MyMemory翻訳が不十分、次の方法を試行...')
             throw new Error('Translation not sufficient')
           }
         }
@@ -98,7 +99,7 @@ export default function QuoteCard() {
 
         // 方法2: LibreTranslate API
         try {
-          console.log('LibreTranslate翻訳を試行...')
+          logger.log('LibreTranslate翻訳を試行...')
           const libreUrl = 'https://libretranslate.com/translate'
 
           const libreResponse = await axios.post(libreUrl, {
@@ -113,16 +114,16 @@ export default function QuoteCard() {
             }
           })
 
-          console.log('LibreTranslate応答:', libreResponse.data)
+          logger.log('LibreTranslate応答:', libreResponse.data)
 
           if (libreResponse.data?.translatedText) {
             translatedText = libreResponse.data.translatedText
-            console.log('LibreTranslate翻訳成功:', translatedText)
+            logger.log('LibreTranslate翻訳成功:', translatedText)
           }
         } catch (libreErr) {
           console.warn('LibreTranslate失敗:', libreErr)
           // 翻訳失敗の場合は英語のまま表示
-          console.log('翻訳失敗、英語のまま表示します')
+          logger.log('翻訳失敗、英語のまま表示します')
         }
       }
 
@@ -132,13 +133,13 @@ export default function QuoteCard() {
         textJa: translatedText
       })
 
-      console.log('名言設定完了:', { author, translatedText })
+      logger.log('名言設定完了:', { author, translatedText })
     } catch (err) {
-      console.error('名言の取得に失敗しました:', err)
+      logger.error('名言の取得に失敗しました:', err)
 
       // エラーの詳細をログ
       if (axios.isAxiosError(err)) {
-        console.error('Axiosエラー詳細:', {
+        logger.error('Axiosエラー詳細:', {
           message: err.message,
           response: err.response?.data,
           status: err.response?.status
