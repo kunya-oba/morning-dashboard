@@ -3,6 +3,7 @@ import { Sparkles, Loader2, AlertCircle, RefreshCw } from 'lucide-react'
 import axios from 'axios'
 import { logger } from '../utils/logger'
 import { PokemonData, StoredPokemon, PokeApiPokemon, PokeApiSpecies, TYPE_NAMES_JA, TYPE_COLORS } from '../types/pokemon'
+import { getRandomPokemonId } from '../constants/pokemon'
 
 export default function PokemonCard() {
   const [pokemon, setPokemon] = useState<PokemonData | null>(null)
@@ -48,8 +49,8 @@ export default function PokemonCard() {
 
   const fetchRandomPokemon = async (date: string) => {
     try {
-      // ランダムなポケモンID（1-1010）
-      const randomId = Math.floor(Math.random() * 1010) + 1
+      // ランダムなポケモンIDを生成
+      const randomId = getRandomPokemonId()
       logger.log(`ランダムポケモンID: ${randomId}`)
 
       // ポケモン基本情報を取得
@@ -67,10 +68,11 @@ export default function PokemonCard() {
       const pokemonData = pokemonResponse.data
       const speciesData = speciesResponse.data
 
-      // 日本語名を取得
-      const japaneseName = speciesData.names.find(
-        (name) => name.language.name === 'ja' || name.language.name === 'ja-Hrkt'
-      )?.name || pokemonData.name
+      // 日本語名を取得（ja-Hrktを優先、次にja、最後にフォールバック）
+      const japaneseName =
+        speciesData.names.find(name => name.language.name === 'ja-Hrkt')?.name ||
+        speciesData.names.find(name => name.language.name === 'ja')?.name ||
+        pokemonData.name
 
       // タイプを取得
       const types = pokemonData.types.map((t) => t.type.name)

@@ -1,5 +1,6 @@
 import { Component, ErrorInfo, ReactNode } from 'react'
 import { AlertCircle } from 'lucide-react'
+import { logger } from '../utils/logger'
 
 interface Props {
   children: ReactNode
@@ -25,7 +26,11 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('エラーが発生しました:', error, errorInfo)
+    // loggerを使用してエラーをログ出力
+    logger.error('エラーが発生しました:', error, errorInfo)
+
+    // 本番環境では、ここでエラートラッキングサービスにエラーを送信できます
+    // 例: Sentry.captureException(error, { extra: errorInfo })
   }
 
   render() {

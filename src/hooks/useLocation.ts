@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Location, JAPAN_CITIES } from '../types/location'
 import { logger } from '../utils/logger'
+import { calculateDistance } from '../utils/geo'
 
 interface UseLocationReturn {
   locations: Location[]
@@ -163,14 +164,16 @@ export function useLocation(): UseLocationReturn {
         (position) => {
           const { latitude, longitude } = position.coords
 
-          // 最も近い都市を見つける（簡易的な実装）
+          // 最も近い都市を見つける（Haversine公式を使用）
           let closestCity = JAPAN_CITIES[0]
           let minDistance = Infinity
 
           JAPAN_CITIES.forEach(city => {
-            const distance = Math.sqrt(
-              Math.pow(city.latitude - latitude, 2) +
-              Math.pow(city.longitude - longitude, 2)
+            const distance = calculateDistance(
+              latitude,
+              longitude,
+              city.latitude,
+              city.longitude
             )
             if (distance < minDistance) {
               minDistance = distance

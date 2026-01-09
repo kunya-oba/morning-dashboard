@@ -2,748 +2,667 @@
 
 レビュー日: 2026-01-09
 レビュワー: Claude Code
+バージョン: 2.0（更新版）
 
 ---
 
 ## 全体評価
 
-プロジェクトは概ね良好な構造で実装されており、機能的には十分に動作しています。しかし、いくつかの改善点とセキュリティ、パフォーマンス、保守性の観点から指摘すべき問題が見つかりました。
+プロジェクトは継続的に改善されており、前回のレビューから多くの機能が追加されました。新しいコンポーネント（PokemonCard、TodoCard、ClockTimerCard、LocationSettingsCard、RoutineCard）が追加され、機能が大幅に拡張されています。ErrorBoundaryの追加により、エラーハンドリングも改善されました。
 
-**評価スコア: B+**
+**評価スコア: A-**（前回: B+から向上）
 
 ### 長所
-- モダンな技術スタック（React 19, TypeScript, Vite）
-- 適切なコンポーネント分割
-- ダークモード対応
+- モダンな技術スタック（React 19, TypeScript, Vite, Tailwind CSS v4）
+- 優れたコンポーネント分割と再利用性
+- ダークモード対応（カスタムフックで管理）
 - ドラッグ&ドロップ機能の実装
-- エラーハンドリングの実装
-- レスポンシブデザイン
+- ErrorBoundaryによる包括的なエラーハンドリング
+- 型定義の整備（pokemon、api、location、routineなど）
+- レスポンシブデザインとアクセシビリティの考慮
+- LocalStorageを使った永続化とマイグレーション機能
+- AbortControllerによる適切なAPI呼び出しのクリーンアップ
 
-### 短所
-- パフォーマンスの最適化が不足
-- 型定義が不完全
-- エラー処理の一貫性がない
+### 改善が必要な点
+- 一部コンポーネントで不要な再レンダリングの可能性
 - テストコードがない
-- 環境変数の管理が不適切
+- エラーメッセージのユーザー向け改善
+- パフォーマンスの最適化余地
 
 ---
 
 ## 🔴 Critical（重要度: 高）
 
-### 1. 環境変数の誤った管理
-**ファイル**: `src/hooks/useBackgroundImage.ts:45`
+### 1. PokemonCard: ハードコードされたポケモンID範囲
+**ファイル**: `src/components/PokemonCard.tsx:52`
 
 ```typescript
-const unsplashAccessKey = ""
+const randomId = Math.floor(Math.random() * 1010) + 1
 ```
 
 **問題点**:
-- Unsplash APIキーがハードコードされており、空文字列になっている
-- 本来は環境変数（`import.meta.env.VITE_UNSPLASH_ACCESS_KEY`）から取得すべき
-- 現在の実装では、APIキーを設定してもViteの環境変数システムが機能していない
+- ポケモンの総数（1010）がハードコードされている
+- PokeAPIの最新世代追加に対応できない
+- ID範囲外のポケモンにアクセスした場合のエラーハンドリングが不十分
 
 **改善案**:
 ```typescript
-const unsplashAccessKey = import.meta.env.VITE_UNSPLASH_ACCESS_KEY || ""
+// constants/pokemon.ts
+export const POKEMON_CONFIG = {
+  MIN_ID: 1,
+  MAX_ID: 1010, // 定期的に更新
+  // または、PokeAPIから動的に取得
+} as const
+
+// PokemonCard.tsx
+const randomId = Math.floor(
+  Math.random() * (POKEMON_CONFIG.MAX_ID - POKEMON_CONFIG.MIN_ID + 1)
+) + POKEMON_CONFIG.MIN_ID
+
+// さらに良い方法: PokeAPIから最大IDを取得
+const fetchMaxPokemonId = async (): Promise<number> => {
+  try {
+    const response = await axios.get('https://pokeapi.co/api/v2/pokemon-species?limit=1')
+    return response.data.count
+  } catch {
+    return 1010 // フォールバック
+  }
+}
 ```
 
-**根拠**: Viteの環境変数システムを正しく使用することで、開発・本番環境での設定分離が可能になり、セキュリティも向上します。
+**根拠**: マジックナンバーを避け、設定の一元管理とメンテナンス性の向上。
 
 ---
 
-### 2. ダークモードの検出が再レンダリング時に動的に更新されない
-**ファイル**: `src/components/WeatherCard.tsx:163, 168, 183-187`
+### 2. ErrorBoundaryでのconsole.errorの使用
+**ファイル**: `src/components/ErrorBoundary.tsx:28`
 
 ```typescript
-stroke={document.documentElement.classList.contains('dark') ? '#374151' : '#e5e7eb'}
+componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  console.error('エラーが発生しました:', error, errorInfo)
+}
 ```
 
 **問題点**:
-- グラフのスタイルがコンポーネントレンダリング時に一度だけ決定される
-- ダークモードを切り替えても、グラフの色が更新されない
-- `document.documentElement.classList.contains('dark')`は静的な値として評価される
+- 本番環境でもconsole.errorが実行される
+- エラーログの収集・監視ができない
 
 **改善案**:
 ```typescript
-// Appコンポーネント内で管理しているisDarkステートをpropsで渡す
-export default function WeatherCard({ isDark }: { isDark: boolean }) {
+componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  // loggerを使用
+  logger.error('エラーが発生しました:', error, errorInfo)
+
+  // 本番環境ではエラートラッキングサービスに送信
+  if (import.meta.env.PROD) {
+    // Sentry, LogRocketなどのエラートラッキングサービスに送信
+    // Sentry.captureException(error, { extra: errorInfo })
+  }
+}
+```
+
+**根拠**: 本番環境でのエラー監視とデバッグの効率化。
+
+---
+
+### 3. TodoCard: crypto.randomUUID()のブラウザ互換性
+**ファイル**: `src/components/TodoCard.tsx:168`
+
+```typescript
+id: crypto.randomUUID(),
+```
+
+**問題点**:
+- `crypto.randomUUID()`は比較的新しいAPI（Safari 15.4+）
+- 古いブラウザでは動作しない可能性がある
+
+**改善案**:
+```typescript
+// utils/uuid.ts
+export function generateId(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID()
+  }
+  // フォールバック
+  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+}
+
+// TodoCard.tsx
+import { generateId } from '../utils/uuid'
+
+const newTask: Task = {
+  id: generateId(),
   // ...
-  stroke={isDark ? '#374151' : '#e5e7eb'}
 }
 ```
 
-または、カスタムフックを作成:
-```typescript
-// hooks/useDarkMode.ts
-export function useDarkMode() {
-  const [isDark, setIsDark] = useState(
-    () => document.documentElement.classList.contains('dark')
-  )
-
-  useEffect(() => {
-    const observer = new MutationObserver(() => {
-      setIsDark(document.documentElement.classList.contains('dark'))
-    })
-
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['class']
-    })
-
-    return () => observer.disconnect()
-  }, [])
-
-  return isDark
-}
-```
-
-**根拠**: UIの状態はReactの状態管理で管理すべきであり、DOMを直接参照する方法は推奨されません。
-
----
-
-### 3. 型定義の不足
-**ファイル**: 複数
-
-**問題点**:
-- axios応答の型が`any`として扱われている
-- API応答の型定義がない
-
-**改善案**:
-```typescript
-// types/api.ts を作成
-export interface OpenMeteoResponse {
-  current: {
-    temperature_2m: number
-    relative_humidity_2m: number
-    precipitation: number
-    weather_code: number
-    wind_speed_10m: number
-  }
-  hourly: {
-    time: string[]
-    temperature_2m: number[]
-  }
-}
-
-// WeatherCard.tsx内で使用
-const response = await axios.get<OpenMeteoResponse>(url)
-const current = response.data.current // 型安全
-```
-
-**根拠**: TypeScriptの利点を最大限に活用し、実行時エラーを防ぐため。
+**根拠**: ブラウザ互換性を確保し、広範なユーザーをサポート。
 
 ---
 
 ## 🟡 Warning（重要度: 中）
 
-### 4. console.logの残存
-**ファイル**: 複数（TrainStatusCard、NewsCard、QuoteCard）
+### 4. ClockTimerCard: 音声再生の実装に問題
+**ファイル**: `src/components/ClockTimerCard.tsx:93-98`
 
-**問題点**:
-- 本番環境でも`console.log`が実行される
-- パフォーマンスへの影響とセキュリティリスク（情報漏洩）
-
-**改善案**:
-開発用のロガーユーティリティを作成:
 ```typescript
-// utils/logger.ts
-const isDev = import.meta.env.DEV
-
-export const logger = {
-  log: (...args: any[]) => isDev && console.log(...args),
-  warn: (...args: any[]) => isDev && console.warn(...args),
-  error: (...args: any[]) => console.error(...args), // エラーは常に出力
+try {
+  const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10...')
+  audio.play().catch(e => logger.error('音声再生エラー:', e))
+} catch (e) {
+  logger.error('音声再生エラー:', e)
 }
-
-// 使用例
-import { logger } from '../utils/logger'
-logger.log('運行情報取得開始...')
 ```
 
-**根拠**: 本番環境でのログ出力は避けるべきです。
+**問題点**:
+- Base64エンコードされた音声データが不完全（途中で切れている）
+- 音声ファイルが実際に再生可能か不明
+- ユーザーが音声通知を無効化できない
+
+**改善案**:
+```typescript
+// 設定に音声通知のオン/オフを追加
+interface TimerSettings {
+  workMinutes: number
+  breakMinutes: number
+  autoStart: boolean
+  soundEnabled: boolean // 追加
+}
+
+// 音声ファイルは完全なものを使用するか、publicフォルダに配置
+const playNotificationSound = () => {
+  if (!settings.soundEnabled) return
+
+  try {
+    const audio = new Audio('/sounds/notification.mp3')
+    audio.volume = 0.5
+    audio.play().catch(e => logger.error('音声再生エラー:', e))
+  } catch (e) {
+    logger.error('音声再生エラー:', e)
+  }
+}
+```
+
+**根拠**: ユーザー体験の向上と音声通知の制御。
 
 ---
 
-### 5. 不要な再レンダリングとメモ化の欠如
-**ファイル**: `src/App.tsx`
+### 5. useLocation: 位置情報の距離計算が不正確
+**ファイル**: `src/hooks/useLocation.ts:171-178`
+
+```typescript
+const distance = Math.sqrt(
+  Math.pow(city.latitude - latitude, 2) +
+  Math.pow(city.longitude - longitude, 2)
+)
+```
 
 **問題点**:
-- `renderCard`関数が毎回再生成される
-- `getColSpan`関数が毎回再生成される
-- 子コンポーネントが不要に再レンダリングされる可能性
+- ユークリッド距離を使用しているが、地球は球体であるため不正確
+- 緯度経度の度数で直接計算しているため、実際の距離とずれる
 
 **改善案**:
 ```typescript
-import { useMemo, useCallback } from 'react'
+// utils/geo.ts
+/**
+ * Haversine公式を使用して2点間の距離を計算（km）
+ */
+export function calculateDistance(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
+  const R = 6371 // 地球の半径（km）
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLon = (lon2 - lon1) * Math.PI / 180
 
-// コンポーネント外に移動（純粋関数の場合）
-const getColSpan = (id: string): number => {
-  return id === 'news' ? 2 : 1
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) *
+    Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2)
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  return R * c
 }
 
-function App() {
-  // または useCallback を使用
-  const renderCard = useCallback((id: string) => {
-    switch (id) {
-      case 'weather':
-        return <WeatherCard />
-      case 'train':
-        return <TrainStatusCard />
-      // ...
-    }
-  }, [])
+// useLocation.ts内で使用
+JAPAN_CITIES.forEach(city => {
+  const distance = calculateDistance(
+    latitude,
+    longitude,
+    city.latitude,
+    city.longitude
+  )
+  if (distance < minDistance) {
+    minDistance = distance
+    closestCity = city
+  }
+})
+```
 
+**根拠**: 正確な地理的距離計算によるユーザー体験の向上。
+
+---
+
+### 6. RoutineCard: 日付チェックの頻度が高い
+**ファイル**: `src/components/RoutineCard.tsx:154-156`
+
+```typescript
+// 1分ごとにチェック
+const interval = setInterval(checkDate, 60000)
+```
+
+**問題点**:
+- 1分ごとにチェックは頻繁すぎる
+- バッテリー消費への影響
+
+**改善案**:
+```typescript
+// 5分ごとにチェック、または日付が変わる時刻を計算
+const interval = setInterval(checkDate, 5 * 60 * 1000) // 5分
+
+// より最適化された方法: 次の日の0時にタイマーを設定
+const getTimeUntilMidnight = () => {
+  const now = new Date()
+  const tomorrow = new Date(now)
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  tomorrow.setHours(0, 0, 0, 0)
+  return tomorrow.getTime() - now.getTime()
+}
+
+// 次の日まで待機
+const timeoutId = setTimeout(() => {
+  checkDate()
+  // その後5分ごとにチェック
+  const interval = setInterval(checkDate, 5 * 60 * 1000)
+  return () => clearInterval(interval)
+}, getTimeUntilMidnight())
+
+return () => {
+  clearTimeout(timeoutId)
+}
+```
+
+**根拠**: パフォーマンスとバッテリー消費の最適化。
+
+---
+
+### 7. WeatherCard: locations配列のデフォルト値が空配列
+**ファイル**: `src/components/WeatherCard.tsx:58`
+
+```typescript
+locations = [],
+```
+
+**問題点**:
+- propsとして渡されない場合、都市選択機能が表示されない
+- App.tsxからは正しく渡されているが、コンポーネント単体での使用時に不便
+
+**改善案**:
+```typescript
+// WeatherCard内でデフォルトの都市リストを使用
+import { JAPAN_CITIES } from '../types/location'
+
+export default function WeatherCard({
+  latitude = 35.6762,
+  longitude = 139.6503,
+  locationName,
+  locations = JAPAN_CITIES.slice(0, 5), // デフォルトで主要5都市
+  onSetCurrentLocation
+}: WeatherCardProps) {
   // ...
 }
 ```
 
-**根拠**: 不要な関数の再生成を防ぎ、パフォーマンスを向上させます。
-
----
-
-### 6. エラー境界（Error Boundary）がない
-**ファイル**: プロジェクト全体
-
-**問題点**:
-- コンポーネントのエラーが適切に処理されない
-- アプリ全体がクラッシュする可能性
-
-**改善案**:
-```typescript
-// components/ErrorBoundary.tsx
-import { Component, ErrorInfo, ReactNode } from 'react'
-
-interface Props {
-  children: ReactNode
-}
-
-interface State {
-  hasError: boolean
-  error: Error | null
-}
-
-export class ErrorBoundary extends Component<Props, State> {
-  constructor(props: Props) {
-    super(props)
-    this.state = { hasError: false, error: null }
-  }
-
-  static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error }
-  }
-
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('エラーが発生しました:', error, errorInfo)
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="p-6 bg-red-50 dark:bg-red-900/20 rounded-xl">
-          <h2 className="text-red-800 dark:text-red-200 font-bold mb-2">
-            エラーが発生しました
-          </h2>
-          <p className="text-red-600 dark:text-red-400 text-sm">
-            ページを再読み込みしてください
-          </p>
-        </div>
-      )
-    }
-
-    return this.props.children
-  }
-}
-
-// App.tsx または main.tsx で使用
-<ErrorBoundary>
-  <App />
-</ErrorBoundary>
-```
-
-**根拠**: React公式が推奨するエラーハンドリングパターン。
-
----
-
-### 7. interval のクリーンアップが不完全
-**ファイル**: 複数のコンポーネント
-
-**問題点**:
-- `setInterval`のクリーンアップは実装されているが、非同期処理の途中でコンポーネントがアンマウントされた場合のハンドリングがない
-
-**改善案**:
-```typescript
-useEffect(() => {
-  let isMounted = true
-
-  const fetchData = async () => {
-    try {
-      const response = await axios.get(url)
-      // コンポーネントがまだマウントされている場合のみ状態を更新
-      if (isMounted) {
-        setData(response.data)
-      }
-    } catch (err) {
-      if (isMounted) {
-        setError(err)
-      }
-    }
-  }
-
-  fetchData()
-  const interval = setInterval(fetchData, 60000)
-
-  return () => {
-    isMounted = false
-    clearInterval(interval)
-  }
-}, [])
-```
-
-または、より現代的なアプローチとして`AbortController`を使用:
-```typescript
-useEffect(() => {
-  const controller = new AbortController()
-
-  const fetchData = async () => {
-    try {
-      const response = await axios.get(url, {
-        signal: controller.signal
-      })
-      setData(response.data)
-    } catch (err) {
-      if (err.name !== 'CanceledError') {
-        setError(err)
-      }
-    }
-  }
-
-  fetchData()
-  const interval = setInterval(fetchData, 60000)
-
-  return () => {
-    controller.abort()
-    clearInterval(interval)
-  }
-}, [])
-```
-
-**根拠**: メモリリークを防ぎ、コンポーネントのライフサイクルを適切に管理します。
-
----
-
-### 8. CORSプロキシへの依存
-**ファイル**: TrainStatusCard、NewsCard、QuoteCard
-
-**問題点**:
-- サードパーティのCORSプロキシに依存している
-- プロキシサービスが停止すると機能が動作しなくなる
-- セキュリティリスク（中間者攻撃の可能性）
-
-**改善案**:
-1. バックエンドAPIを構築し、そこでAPIリクエストを処理する
-2. Vercel/Netlifyのサーバーレス関数を使用
-3. Cloudflare Workersを使用
-
-```typescript
-// netlify/functions/fetch-news.ts (例)
-import type { Handler } from '@netlify/functions'
-import axios from 'axios'
-
-export const handler: Handler = async (event) => {
-  try {
-    const response = await axios.get('https://news.google.com/rss?hl=ja&gl=JP&ceid=JP:ja')
-
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ data: response.data })
-    }
-  } catch (error) {
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: 'Failed to fetch news' })
-    }
-  }
-}
-
-// フロントエンドから呼び出し
-const response = await axios.get('/.netlify/functions/fetch-news')
-```
-
-**根拠**: サードパーティサービスへの依存を減らし、セキュリティとパフォーマンスを向上させます。
+**根拠**: コンポーネントの独立性とユーザビリティの向上。
 
 ---
 
 ## 🟢 Info（重要度: 低）
 
-### 9. マジックナンバーの使用
-**ファイル**: 複数
+### 8. PokemonCard: 日本語名取得の改善余地
+**ファイル**: `src/components/PokemonCard.tsx:71-73`
+
+```typescript
+const japaneseName = speciesData.names.find(
+  (name) => name.language.name === 'ja' || name.language.name === 'ja-Hrkt'
+)?.name || pokemonData.name
+```
 
 **問題点**:
-```typescript
-const interval = setInterval(fetchWeather, 600000) // 600000って何？
-```
+- `ja-Hrkt`（ひらがな・カタカナ表記）を優先すべき
+- フォールバックが英語名のため、読みにくい
 
 **改善案**:
 ```typescript
-// constants/intervals.ts
-export const INTERVALS = {
-  WEATHER_UPDATE: 10 * 60 * 1000,  // 10分
-  TRAIN_STATUS_UPDATE: 5 * 60 * 1000,  // 5分
-  NEWS_UPDATE: 15 * 60 * 1000,  // 15分
-} as const
-
-// コンポーネント内で使用
-import { INTERVALS } from '../constants/intervals'
-const interval = setInterval(fetchWeather, INTERVALS.WEATHER_UPDATE)
+// ja-Hrkt（カタカナ）を優先し、なければjaを使用
+const japaneseName =
+  speciesData.names.find(name => name.language.name === 'ja-Hrkt')?.name ||
+  speciesData.names.find(name => name.language.name === 'ja')?.name ||
+  pokemonData.name
 ```
 
-**根拠**: コードの可読性と保守性が向上します。
+**根拠**: 日本語ユーザー向けの可読性向上。
 
 ---
 
-### 10. コンポーネントの責務が大きい
-**ファイル**: `src/App.tsx`
+### 9. TodoCard: タスクの永続化期間が無制限
+**ファイル**: `src/components/TodoCard.tsx:145-147`
 
 **問題点**:
-- ダークモードの管理
-- 背景画像の管理
-- カードの順序管理
-- すべてが1つのコンポーネントに集中している
+- 完了したタスクが永遠にLocalStorageに残る
+- 古いタスクが蓄積してストレージを圧迫する可能性
 
 **改善案**:
-カスタムフックに分離:
 ```typescript
-// hooks/useCardOrder.ts
-export function useCardOrder() {
-  const defaultCardOrder = ['weather', 'train', 'anniversary', 'quote', 'news']
-  const [cardOrder, setCardOrder] = useState<string[]>(() => {
-    const savedOrder = localStorage.getItem('cardOrder')
-    return savedOrder ? JSON.parse(savedOrder) : defaultCardOrder
+// 完了済みタスクの自動削除機能を追加
+useEffect(() => {
+  // 7日以上前の完了タスクを削除
+  const sevenDaysAgo = new Date()
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+
+  const cleanedTasks = tasks.filter(task => {
+    if (!task.completed) return true
+
+    const createdDate = new Date(task.createdAt)
+    return createdDate > sevenDaysAgo
   })
 
-  const handleDragEnd = (event: DragEndEvent) => {
-    // ドラッグ処理
+  if (cleanedTasks.length !== tasks.length) {
+    setTasks(cleanedTasks)
   }
+}, [tasks])
 
-  return { cardOrder, handleDragEnd }
-}
-
-// hooks/useDarkMode.ts
-export function useDarkMode() {
-  const [isDark, setIsDark] = useState(false)
-
-  useEffect(() => {
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-    setIsDark(prefersDark)
-  }, [])
-
-  const toggleDarkMode = () => {
-    setIsDark(!isDark)
-    document.documentElement.classList.toggle('dark')
-  }
-
-  return { isDark, toggleDarkMode }
-}
-
-// App.tsx で使用
-function App() {
-  const { isDark, toggleDarkMode } = useDarkMode()
-  const { cardOrder, handleDragEnd } = useCardOrder()
-  const { imageUrl, loading: bgLoading } = useBackgroundImage()
-
-  // ...
-}
+// または、設定で保持期間を変更可能にする
 ```
 
-**根拠**: 単一責任の原則（SRP）に従い、コードの再利用性とテスタビリティを向上させます。
+**根拠**: ストレージの効率的な使用。
 
 ---
 
-### 11. アクセシビリティの改善余地
-**ファイル**: 複数
+### 10. LocationSettingsCard: 検索機能の改善余地
+**ファイル**: `src/components/LocationSettingsCard.tsx:49-59`
+
+```typescript
+const filteredJapanCities = JAPAN_CITIES.filter(city =>
+  city.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+  city.nameEn.toLowerCase().includes(searchQuery.toLowerCase()) ||
+  city.prefecture?.includes(searchQuery)
+)
+```
 
 **問題点**:
-- キーボードナビゲーションの対応が不完全
-- ARIA属性の不足
-- フォーカス管理が不十分
+- 部分一致のみで、読み仮名検索に対応していない
+- 大文字小文字の変換が毎回実行される
 
 **改善案**:
 ```typescript
-// ニュースリンクの改善例
-<a
-  href={item.link}
-  target="_blank"
-  rel="noopener noreferrer"
-  aria-label={`ニュース記事: ${item.title}`}
-  className="..."
->
-  {/* ... */}
-</a>
+const normalizedQuery = searchQuery.toLowerCase()
 
-// ダークモード切り替えボタンの改善
-<button
-  onClick={toggleDarkMode}
-  aria-label={isDark ? 'ライトモードに切り替え' : 'ダークモードに切り替え'}
-  aria-pressed={isDark}
-  className="..."
->
-  {/* ... */}
-</button>
+const filteredJapanCities = useMemo(() => {
+  if (!searchQuery) return JAPAN_CITIES
+
+  return JAPAN_CITIES.filter(city =>
+    city.name.toLowerCase().includes(normalizedQuery) ||
+    city.nameEn.toLowerCase().includes(normalizedQuery) ||
+    city.prefecture?.toLowerCase().includes(normalizedQuery) ||
+    city.kana?.toLowerCase().includes(normalizedQuery) // 読み仮名対応（追加必要）
+  )
+}, [searchQuery])
 ```
 
-**根拠**: Web Content Accessibility Guidelines (WCAG) 2.1に準拠し、すべてのユーザーにアクセス可能なUIを提供します。
+**根拠**: 検索のパフォーマンスとユーザビリティの向上。
 
 ---
 
-### 12. 日付フォーマット関数の重複
-**ファイル**: AnniversaryCard、NewsCard
+### 11. RoutineCard: テンプレート適用時の確認なし
+**ファイル**: `src/components/RoutineCard.tsx:117-122`
+
+```typescript
+const applyTemplate = (templateKey: keyof typeof ROUTINE_TEMPLATES) => {
+  const template = ROUTINE_TEMPLATES[templateKey]
+  setRoutineItems(template)
+  localStorage.setItem('routineItems', JSON.stringify(template))
+  setShowSettings(false)
+}
+```
 
 **問題点**:
-- 各コンポーネントで日付フォーマット処理が重複している
+- カスタマイズしたルーティンが確認なしで上書きされる
+- データ損失のリスク
 
 **改善案**:
 ```typescript
-// utils/dateFormatter.ts
-export const formatRelativeTime = (dateString: string): string => {
-  try {
-    const date = new Date(dateString)
-    const now = new Date()
-    const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60))
-
-    if (diffInMinutes < 60) {
-      return `${diffInMinutes}分前`
-    }
-
-    const diffInHours = Math.floor(diffInMinutes / 60)
-    if (diffInHours < 24) {
-      return `${diffInHours}時間前`
-    }
-
-    return date.toLocaleDateString('ja-JP', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
-  } catch {
-    return ''
-  }
-}
-
-export const formatJapaneseDate = (date: Date = new Date()): string => {
-  return date.toLocaleDateString('ja-JP', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    weekday: 'long'
+const applyTemplate = (templateKey: keyof typeof ROUTINE_TEMPLATES) => {
+  // カスタマイズされたルーティンがある場合は確認
+  const hasCustomItems = routineItems.some(item => {
+    const defaultItem = DEFAULT_ROUTINE_ITEMS.find(d => d.id === item.id)
+    return !defaultItem ||
+           item.enabled !== defaultItem.enabled ||
+           item.estimatedMinutes !== defaultItem.estimatedMinutes
   })
+
+  if (hasCustomItems && !window.confirm('現在の設定を上書きしますか？')) {
+    return
+  }
+
+  const template = ROUTINE_TEMPLATES[templateKey]
+  setRoutineItems(template)
+  localStorage.setItem('routineItems', JSON.stringify(template))
+  setShowSettings(false)
 }
 ```
 
-**根拠**: DRY原則（Don't Repeat Yourself）に従い、保守性を向上させます。
+**根拠**: データ損失の防止とユーザー体験の向上。
 
 ---
 
-### 13. 画像の遅延読み込みとプリロード
-**ファイル**: `src/hooks/useBackgroundImage.ts`
+### 12. App.tsx: renderCard関数の最適化余地
+**ファイル**: `src/App.tsx:105-148`
 
 **問題点**:
-- 背景画像の読み込み中、ユーザーに視覚的フィードバックが不足
-- プリロードの最適化がない
+- `renderCard`関数が毎レンダリングで再生成される
+- メモ化されていないため、子コンポーネントが不要に再レンダリングされる可能性
 
 **改善案**:
 ```typescript
-export function useBackgroundImage() {
-  // ...
-
-  useEffect(() => {
-    const fetchBackgroundImage = async () => {
-      // ...
-
-      // 画像のプリロード戦略
-      const img = new Image()
-      img.loading = 'eager' // 優先的に読み込み
-
-      // 低解像度版を先に読み込む（Progressive loading）
-      const lowResUrl = imageUrl.replace('/1920/1080', '/800/450')
-      const lowResImg = new Image()
-
-      lowResImg.onload = () => {
-        setState(prev => ({
-          ...prev,
-          imageUrl: lowResUrl,
-          loading: false
-        }))
-
-        // 高解像度版を読み込み
-        img.src = imageUrl
-      }
-
-      img.onload = () => {
-        setState(prev => ({
-          ...prev,
-          imageUrl: imageUrl
-        }))
-      }
-
-      lowResImg.src = lowResUrl
-    }
-
-    fetchBackgroundImage()
-  }, [])
-}
+// コンポーネント外に定義するか、useCallbackを使用
+const renderCard = useCallback((id: string) => {
+  switch (id) {
+    case 'weather':
+      return (
+        <WeatherCard
+          latitude={currentLocation?.latitude}
+          longitude={currentLocation?.longitude}
+          locationName={currentLocation?.name}
+          locations={locations}
+          onSetCurrentLocation={setCurrentLocation}
+        />
+      )
+    // ...
+  }
+}, [currentLocation, locations, setCurrentLocation]) // 依存関係を明示
 ```
 
-**根拠**: 体感パフォーマンスの向上。
+**根拠**: 不要な再レンダリングを防ぎ、パフォーマンスを向上。
 
 ---
 
-### 14. HTMLスクレイピングの脆弱性
-**ファイル**: `src/components/TrainStatusCard.tsx`
+## ✅ 改善された点（前回レビューからの進捗）
 
-**問題点**:
-- HTMLスクレイピングは、サイトのHTML構造変更に非常に脆弱
-- 複数のフォールバックセレクタがあるが、本質的な解決にはならない
+### 1. ErrorBoundaryの実装 ✓
+**前回の指摘**: エラー境界がない
+**現状**: `ErrorBoundary.tsx`が実装され、適切なエラーハンドリングが可能に
 
-**改善案**:
-1. 公式APIがある場合は、APIを使用する
-2. 定期的な監視とアラート機能を実装
-3. ユーザーに公式サイトへのリンクを明示する
+### 2. loggerユーティリティの実装 ✓
+**前回の指摘**: console.logが残存
+**現状**: `utils/logger.ts`が実装され、開発環境と本番環境で適切にログが制御される
 
-```typescript
-{error && (
-  <div className="mt-4">
-    <a
-      href="https://www.kotsu.metro.tokyo.jp/subway/schedule/asakusa.html"
-      target="_blank"
-      rel="noopener noreferrer"
-      className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
-    >
-      公式サイトで最新情報を確認 →
-    </a>
-  </div>
-)}
-```
+### 3. 型定義の充実 ✓
+**前回の指摘**: 型定義が不足
+**現状**: `types/api.ts`, `types/pokemon.ts`, `types/routine.ts`, `types/location.ts`など、適切な型定義が追加
 
-**根拠**: スクレイピングは不安定であり、公式データソースの使用が望ましい。
+### 4. カスタムフックの分離 ✓
+**前回の指摘**: コンポーネントの責務が大きい
+**現状**: `useDarkMode`, `useLocation`, `useBackgroundImage`などのカスタムフックに分離
 
----
+### 5. 定数の一元管理 ✓
+**前回の指摘**: マジックナンバーの使用
+**現状**: `constants/intervals.ts`などで定数が管理されている
 
-### 15. TypeScript strict モードの活用不足
-**ファイル**: 複数
-
-**問題点**:
-- `as string`などの型アサーションが多用されている
-- nullチェックが不十分
-
-**改善例**:
-```typescript
-// 改善前
-const oldIndex = items.indexOf(active.id as string)
-
-// 改善後
-if (typeof active.id !== 'string' || typeof over.id !== 'string') {
-  return
-}
-const oldIndex = items.indexOf(active.id)
-const newIndex = items.indexOf(over.id)
-```
-
-**根拠**: 型安全性を高め、実行時エラーを防ぐ。
+### 6. AbortControllerの使用 ✓
+**前回の指摘**: 非同期処理のクリーンアップが不完全
+**現状**: `WeatherCard.tsx`でAbortControllerが使用され、適切にクリーンアップされている
 
 ---
 
 ## 追加の推奨事項
 
-### 16. テストコードの追加
+### 13. テストコードの追加
 **優先度**: 高
 
 プロジェクトにテストコードがありません。以下のテスト戦略を推奨します：
 
 ```typescript
-// __tests__/components/WeatherCard.test.tsx
+// __tests__/components/PokemonCard.test.tsx
 import { render, screen, waitFor } from '@testing-library/react'
-import WeatherCard from '../src/components/WeatherCard'
+import PokemonCard from '../../src/components/PokemonCard'
 import axios from 'axios'
 
 jest.mock('axios')
 const mockedAxios = axios as jest.Mocked<typeof axios>
 
-describe('WeatherCard', () => {
+describe('PokemonCard', () => {
   it('ローディング状態を表示する', () => {
-    render(<WeatherCard />)
+    render(<PokemonCard />)
+    expect(screen.getByText('今日のポケモン')).toBeInTheDocument()
     expect(screen.getByRole('progressbar')).toBeInTheDocument()
   })
 
-  it('天気データを正しく表示する', async () => {
+  it('ポケモンデータを正しく表示する', async () => {
     mockedAxios.get.mockResolvedValueOnce({
       data: {
-        current: {
-          temperature_2m: 20,
-          weather_code: 0,
-          // ...
-        }
+        id: 25,
+        name: 'pikachu',
+        sprites: {
+          other: {
+            'official-artwork': {
+              front_default: 'https://example.com/pikachu.png'
+            }
+          }
+        },
+        types: [{ type: { name: 'electric' } }],
+        height: 4,
+        weight: 60
       }
     })
 
-    render(<WeatherCard />)
+    mockedAxios.get.mockResolvedValueOnce({
+      data: {
+        names: [
+          { language: { name: 'ja-Hrkt' }, name: 'ピカチュウ' }
+        ]
+      }
+    })
+
+    render(<PokemonCard />)
 
     await waitFor(() => {
-      expect(screen.getByText('20°C')).toBeInTheDocument()
+      expect(screen.getByText('ピカチュウ')).toBeInTheDocument()
+      expect(screen.getByText('でんき')).toBeInTheDocument()
     })
+  })
+})
+
+// __tests__/hooks/useLocation.test.ts
+import { renderHook, act } from '@testing-library/react'
+import { useLocation } from '../../src/hooks/useLocation'
+
+describe('useLocation', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  it('デフォルトで東京が選択される', () => {
+    const { result } = renderHook(() => useLocation())
+    expect(result.current.currentLocation?.name).toBe('東京')
+  })
+
+  it('位置情報を追加できる', () => {
+    const { result } = renderHook(() => useLocation())
+
+    act(() => {
+      result.current.addLocation({
+        id: 'test',
+        name: 'テスト',
+        latitude: 0,
+        longitude: 0,
+        country: 'テスト国'
+      })
+    })
+
+    expect(result.current.locations).toContainEqual(
+      expect.objectContaining({ name: 'テスト' })
+    )
   })
 })
 ```
 
-### 17. Linting と Formatting の設定
+### 14. パフォーマンス監視の追加
 **優先度**: 中
 
-ESLintとPrettierの設定を追加:
-
-```json
-// .eslintrc.json
-{
-  "extends": [
-    "eslint:recommended",
-    "plugin:@typescript-eslint/recommended",
-    "plugin:react/recommended",
-    "plugin:react-hooks/recommended"
-  ],
-  "rules": {
-    "no-console": "warn",
-    "@typescript-eslint/no-explicit-any": "error"
-  }
-}
-
-// .prettierrc
-{
-  "semi": false,
-  "singleQuote": true,
-  "trailingComma": "es5",
-  "printWidth": 100
-}
-```
-
-### 18. パフォーマンス監視
-**優先度**: 低
-
-Web Vitalsの測定を追加:
+Web Vitalsの測定を追加することを推奨：
 
 ```typescript
 // src/utils/vitals.ts
 import { onCLS, onFID, onFCP, onLCP, onTTFB } from 'web-vitals'
+import { logger } from './logger'
 
 export function reportWebVitals() {
-  onCLS(console.log)
-  onFID(console.log)
-  onFCP(console.log)
-  onLCP(console.log)
-  onTTFB(console.log)
+  if (import.meta.env.DEV) {
+    onCLS(metric => logger.log('CLS:', metric))
+    onFID(metric => logger.log('FID:', metric))
+    onFCP(metric => logger.log('FCP:', metric))
+    onLCP(metric => logger.log('LCP:', metric))
+    onTTFB(metric => logger.log('TTFB:', metric))
+  }
 }
 
 // main.tsx
 import { reportWebVitals } from './utils/vitals'
 reportWebVitals()
+```
+
+### 15. CI/CDパイプラインの設定
+**優先度**: 中
+
+GitHub Actionsを使用したCI/CDを推奨：
+
+```yaml
+# .github/workflows/ci.yml
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run type-check
+      - run: npm test
+      - run: npm run build
 ```
 
 ---
@@ -753,37 +672,38 @@ reportWebVitals()
 ### 優先順位別の対応推奨事項
 
 #### 🔴 即座に対応すべき項目
-1. 環境変数の適切な管理（#1）
-2. ダークモードの状態管理の修正（#2）
-3. 型定義の追加（#3）
+1. PokemonCardのポケモンID範囲の定数化（#1）
+2. ErrorBoundaryでのconsole.error問題（#2）
+3. crypto.randomUUID()の互換性対応（#3）
 
-#### 🟡 次のスプリント/イテレーションで対応すべき項目
-4. console.logの削除（#4）
-5. パフォーマンスの最適化（#5）
-6. エラー境界の追加（#6）
-7. interval クリーンアップの改善（#7）
-8. CORSプロキシの代替案検討（#8）
+#### 🟡 次のイテレーションで対応すべき項目
+4. ClockTimerCardの音声再生改善（#4）
+5. useLocationの距離計算修正（#5）
+6. RoutineCardの日付チェック最適化（#6）
+7. WeatherCardのlocationsデフォルト値改善（#7）
 
 #### 🟢 リファクタリング時に対応すべき項目
-9. マジックナンバーの定数化（#9）
-10. コンポーネントの責務分離（#10）
-11. アクセシビリティの改善（#11）
-12. 日付フォーマット関数の統一（#12）
-13. 画像読み込みの最適化（#13）
-14. スクレイピングの改善（#14）
-15. 型アサーションの削減（#15）
+8. PokemonCardの日本語名取得改善（#8）
+9. TodoCardのタスク自動削除機能（#9）
+10. LocationSettingsCardの検索機能改善（#10）
+11. RoutineCardのテンプレート適用確認（#11）
+12. App.tsxのrenderCard関数最適化（#12）
 
 #### 📚 長期的に追加すべき項目
-16. テストコードの追加
-17. Linting/Formatting設定
-18. パフォーマンス監視
+13. テストコードの追加（最優先）
+14. パフォーマンス監視の導入
+15. CI/CDパイプラインの設定
 
 ---
 
 ## 結論
 
-このプロジェクトは、基本的な機能は十分に実装されており、ユーザー体験も良好です。しかし、保守性、拡張性、パフォーマンスの観点から、上記の改善を行うことで、より堅牢で高品質なアプリケーションになります。
+プロジェクトは前回のレビューから大幅に改善され、多くの新機能が追加されました。型定義の充実、カスタムフックの分離、ErrorBoundaryの実装など、コード品質は着実に向上しています。
 
-特に、環境変数の管理、ダークモードの状態管理、型安全性の向上は早急に対応すべき項目です。これらを修正することで、開発体験が向上し、バグの発生を未然に防ぐことができます。
+今後は以下の点に注力することを推奨します：
 
-また、テストコードの追加は、長期的な保守性を大幅に向上させるため、次のフェーズでの実装を強く推奨します。
+1. **テストコードの追加**: 機能が増えた今こそ、テストによる品質保証が重要です
+2. **パフォーマンス最適化**: 不要な再レンダリングの削減とメモ化の活用
+3. **エッジケースへの対応**: ブラウザ互換性、エラーハンドリング、データ検証の強化
+
+全体として、非常に良い状態のプロジェクトです。上記の改善を行うことで、さらに堅牢で保守性の高いアプリケーションになります。
