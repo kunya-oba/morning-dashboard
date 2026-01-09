@@ -28,14 +28,44 @@ export function useLocation(): UseLocationReturn {
         logger.error('位置情報の復元に失敗:', e)
       }
     }
-    // デフォルトは東京
-    return [{
-      id: 'tokyo',
-      name: '東京',
-      latitude: 35.6762,
-      longitude: 139.6503,
-      country: '日本'
-    }]
+    // デフォルトは主要都市
+    return [
+      {
+        id: 'tokyo',
+        name: '東京',
+        latitude: 35.6762,
+        longitude: 139.6503,
+        country: '日本'
+      },
+      {
+        id: 'osaka',
+        name: '大阪',
+        latitude: 34.6937,
+        longitude: 135.5023,
+        country: '日本'
+      },
+      {
+        id: 'nagoya',
+        name: '名古屋',
+        latitude: 35.1815,
+        longitude: 136.9066,
+        country: '日本'
+      },
+      {
+        id: 'sapporo',
+        name: '札幌',
+        latitude: 43.0642,
+        longitude: 141.3469,
+        country: '日本'
+      },
+      {
+        id: 'fukuoka',
+        name: '福岡',
+        latitude: 33.5904,
+        longitude: 130.4017,
+        country: '日本'
+      }
+    ]
   })
 
   const [currentLocation, setCurrentLocationState] = useState<Location | null>(() => {
