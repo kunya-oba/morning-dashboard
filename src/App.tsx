@@ -21,12 +21,6 @@ import QuoteCard from './components/QuoteCard'
 import SortableCard from './components/SortableCard'
 import { useBackgroundImage } from './hooks/useBackgroundImage'
 
-// カードのメタデータ
-interface CardMeta {
-  id: string
-  colSpan: number
-}
-
 function App() {
   const [isDark, setIsDark] = useState(false)
   const [useBackground, setUseBackground] = useState(() => {

@@ -42,7 +42,7 @@ export function useBackgroundImage() {
         let imageUrl: string
 
         // Unsplash APIキーが設定されている場合は公式APIを使用
-        const unsplashAccessKey = import.meta.env.VITE_UNSPLASH_ACCESS_KEY
+        const unsplashAccessKey = ""
 
         if (unsplashAccessKey) {
           // Unsplash API（高品質な朝の画像）
