@@ -151,8 +151,8 @@ export default function RoutineCard() {
       }
     }
 
-    // 1分ごとにチェック
-    const interval = setInterval(checkDate, 60000)
+    // 5分ごとにチェック（パフォーマンス最適化）
+    const interval = setInterval(checkDate, 5 * 60 * 1000) // 300000ms = 5分
     return () => clearInterval(interval)
   }, [todayProgress.date])
 
