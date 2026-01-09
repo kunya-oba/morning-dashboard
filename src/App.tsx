@@ -66,7 +66,31 @@ function App() {
     const savedOrder = localStorage.getItem('cardOrder')
     if (savedOrder) {
       try {
-        return JSON.parse(savedOrder) as string[]
+        const parsed = JSON.parse(savedOrder) as string[]
+
+        // マイグレーション: 新しいカードを追加
+        const migratedOrder = [...parsed]
+        defaultCardOrder.forEach(cardId => {
+          if (!migratedOrder.includes(cardId)) {
+            // weatherの次にclockを挿入
+            if (cardId === 'clock') {
+              const weatherIndex = migratedOrder.indexOf('weather')
+              if (weatherIndex !== -1) {
+                migratedOrder.splice(weatherIndex + 1, 0, cardId)
+              } else {
+                migratedOrder.unshift(cardId)
+              }
+            } else {
+              migratedOrder.push(cardId)
+            }
+          }
+        })
+
+        // マイグレーション後の順序を保存
+        localStorage.setItem('cardOrder', JSON.stringify(migratedOrder))
+        logger.log('カード順序をマイグレーション:', migratedOrder)
+
+        return migratedOrder
       } catch (e) {
         logger.error('カード順序の復元に失敗:', e)
         return defaultCardOrder

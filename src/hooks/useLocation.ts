@@ -19,53 +19,73 @@ interface UseLocationReturn {
  * - Geolocation APIで現在地を取得
  */
 export function useLocation(): UseLocationReturn {
+  // デフォルトの主要都市
+  const defaultCities: Location[] = [
+    {
+      id: 'tokyo',
+      name: '東京',
+      latitude: 35.6762,
+      longitude: 139.6503,
+      country: '日本'
+    },
+    {
+      id: 'osaka',
+      name: '大阪',
+      latitude: 34.6937,
+      longitude: 135.5023,
+      country: '日本'
+    },
+    {
+      id: 'nagoya',
+      name: '名古屋',
+      latitude: 35.1815,
+      longitude: 136.9066,
+      country: '日本'
+    },
+    {
+      id: 'sapporo',
+      name: '札幌',
+      latitude: 43.0642,
+      longitude: 141.3469,
+      country: '日本'
+    },
+    {
+      id: 'fukuoka',
+      name: '福岡',
+      latitude: 33.5904,
+      longitude: 130.4017,
+      country: '日本'
+    }
+  ]
+
   const [locations, setLocations] = useState<Location[]>(() => {
     const saved = localStorage.getItem('locations')
     if (saved) {
       try {
-        return JSON.parse(saved)
+        const parsed = JSON.parse(saved) as Location[]
+
+        // マイグレーション: デフォルト都市を追加
+        const migratedLocations = [...parsed]
+        defaultCities.forEach(city => {
+          if (!migratedLocations.some(loc => loc.id === city.id)) {
+            migratedLocations.push(city)
+            logger.log(`位置情報を追加: ${city.name}`)
+          }
+        })
+
+        // マイグレーション後のデータを保存
+        if (migratedLocations.length > parsed.length) {
+          localStorage.setItem('locations', JSON.stringify(migratedLocations))
+          logger.log('位置情報をマイグレーション:', migratedLocations)
+        }
+
+        return migratedLocations
       } catch (e) {
         logger.error('位置情報の復元に失敗:', e)
       }
     }
     // デフォルトは主要都市
-    return [
-      {
-        id: 'tokyo',
-        name: '東京',
-        latitude: 35.6762,
-        longitude: 139.6503,
-        country: '日本'
-      },
-      {
-        id: 'osaka',
-        name: '大阪',
-        latitude: 34.6937,
-        longitude: 135.5023,
-        country: '日本'
-      },
-      {
-        id: 'nagoya',
-        name: '名古屋',
-        latitude: 35.1815,
-        longitude: 136.9066,
-        country: '日本'
-      },
-      {
-        id: 'sapporo',
-        name: '札幌',
-        latitude: 43.0642,
-        longitude: 141.3469,
-        country: '日本'
-      },
-      {
-        id: 'fukuoka',
-        name: '福岡',
-        latitude: 33.5904,
-        longitude: 130.4017,
-        country: '日本'
-      }
-    ]
+    return defaultCities
   })
 
   const [currentLocation, setCurrentLocationState] = useState<Location | null>(() => {
