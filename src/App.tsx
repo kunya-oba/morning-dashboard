@@ -21,6 +21,7 @@ import AnniversaryCard from './components/AnniversaryCard'
 import QuoteCard from './components/QuoteCard'
 import TodoCard from './components/TodoCard'
 import LocationSettingsCard from './components/LocationSettingsCard'
+import ClockTimerCard from './components/ClockTimerCard'
 import SortableCard from './components/SortableCard'
 import { useBackgroundImage } from './hooks/useBackgroundImage'
 import { useLocation } from './hooks/useLocation'
@@ -57,7 +58,7 @@ function App() {
   } = useLocation()
 
   // デフォルトのカード順序（IDのみ）
-  const defaultCardOrder = ['weather', 'train', 'todo', 'location', 'anniversary', 'quote', 'news']
+  const defaultCardOrder = ['weather', 'clock', 'train', 'todo', 'location', 'anniversary', 'quote', 'news']
 
   // カードの順序を管理
   const [cardOrder, setCardOrder] = useState<string[]>(() => {
@@ -87,6 +88,8 @@ function App() {
             onSetCurrentLocation={setCurrentLocation}
           />
         )
+      case 'clock':
+        return <ClockTimerCard />
       case 'train':
         return <TrainStatusCard />
       case 'todo':
