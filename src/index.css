@@ -35,3 +35,17 @@ h1, h2, h3, h4, h5, h6 {
 .dark .scrollbar-thin::-webkit-scrollbar-thumb {
   background-color: rgb(75 85 99);
 }
+
+/* アニメーション */
+@keyframes bounce-once {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.animate-bounce-once {
+  animation: bounce-once 0.6s ease-in-out;
+}
