@@ -42,7 +42,13 @@ const getWeatherDescription = (code: number): string => {
   return '雷雨'
 }
 
-export default function WeatherCard() {
+interface WeatherCardProps {
+  latitude?: number
+  longitude?: number
+  locationName?: string
+}
+
+export default function WeatherCard({ latitude = 35.6762, longitude = 139.6503, locationName }: WeatherCardProps) {
   const [weather, setWeather] = useState<WeatherData | null>(null)
   const [hourlyData, setHourlyData] = useState<HourlyTemperature[]>([])
   const [loading, setLoading] = useState(true)
@@ -56,10 +62,6 @@ export default function WeatherCard() {
       try {
         setLoading(true)
         setError(null)
-
-        // 東京の緯度経度
-        const latitude = 35.6762
-        const longitude = 139.6503
 
         // 現在の天気と24時間の気温予報を取得
         const response = await axios.get<OpenMeteoResponse>(
@@ -114,7 +116,7 @@ export default function WeatherCard() {
       controller.abort()
       clearInterval(interval)
     }
-  }, [])
+  }, [latitude, longitude])
 
   if (loading) {
     return (
@@ -146,10 +148,17 @@ export default function WeatherCard() {
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 hover:shadow-xl transition-all">
-      <h2 className="text-2xl font-display font-semibold mb-6 text-gray-800 dark:text-gray-100 flex items-center gap-2">
-        <Sun className="w-7 h-7 text-yellow-500" />
-        今日の天気
-      </h2>
+      <div className="mb-6">
+        <h2 className="text-2xl font-display font-semibold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+          <Sun className="w-7 h-7 text-yellow-500" />
+          今日の天気
+        </h2>
+        {locationName && (
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 ml-9">
+            {locationName}
+          </p>
+        )}
+      </div>
 
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">

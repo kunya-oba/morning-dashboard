@@ -20,8 +20,10 @@ import NewsCard from './components/NewsCard'
 import AnniversaryCard from './components/AnniversaryCard'
 import QuoteCard from './components/QuoteCard'
 import TodoCard from './components/TodoCard'
+import LocationSettingsCard from './components/LocationSettingsCard'
 import SortableCard from './components/SortableCard'
 import { useBackgroundImage } from './hooks/useBackgroundImage'
+import { useLocation } from './hooks/useLocation'
 
 function App() {
   // ダークモードの状態をLocalStorageから復元
@@ -43,8 +45,19 @@ function App() {
   // 背景画像を取得
   const { imageUrl, loading: bgLoading } = useBackgroundImage()
 
+  // 位置情報管理
+  const {
+    locations,
+    currentLocation,
+    setCurrentLocation,
+    addLocation,
+    removeLocation,
+    getCurrentPosition,
+    isLoadingGeo
+  } = useLocation()
+
   // デフォルトのカード順序（IDのみ）
-  const defaultCardOrder = ['weather', 'train', 'todo', 'anniversary', 'quote', 'news']
+  const defaultCardOrder = ['weather', 'train', 'todo', 'location', 'anniversary', 'quote', 'news']
 
   // カードの順序を管理
   const [cardOrder, setCardOrder] = useState<string[]>(() => {
@@ -65,11 +78,29 @@ function App() {
   const renderCard = (id: string) => {
     switch (id) {
       case 'weather':
-        return <WeatherCard />
+        return (
+          <WeatherCard
+            latitude={currentLocation?.latitude}
+            longitude={currentLocation?.longitude}
+            locationName={currentLocation?.name}
+          />
+        )
       case 'train':
         return <TrainStatusCard />
       case 'todo':
         return <TodoCard />
+      case 'location':
+        return (
+          <LocationSettingsCard
+            locations={locations}
+            currentLocation={currentLocation}
+            onSetCurrentLocation={setCurrentLocation}
+            onAddLocation={addLocation}
+            onRemoveLocation={removeLocation}
+            onGetCurrentPosition={getCurrentPosition}
+            isLoadingGeo={isLoadingGeo}
+          />
+        )
       case 'anniversary':
         return <AnniversaryCard />
       case 'quote':
